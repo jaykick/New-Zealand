@@ -1,0 +1,387 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>🇳🇿 紐西蘭 Q 版旅遊小幫手</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <script>
+    tailwind.config = {
+      theme: { extend: { fontFamily: { sans: ['Nunito', 'sans-serif'] }, colors: { pastel: { blue: '#A7C7E7', pink: '#FFD1DC', yellow: '#FDFD96', green: '#C1E1C1' } } } }
+    }
+  </script>
+  <style>
+    body { background-color: #f3f4f6; }
+    .app-container { max-width: 480px; margin: 0 auto; background: white; min-height: 100vh; position: relative; padding-bottom: 80px; box-shadow: 0 0 15px rgba(0,0,0,0.1); }
+    .hide-scrollbar::-webkit-scrollbar { display: none; }
+    .modal-enter-active, .modal-leave-active { transition: opacity 0.3s ease; }
+    .modal-enter-from, .modal-leave-to { opacity: 0; }
+  </style>
+</head>
+<body class="text-gray-700">
+  <div id="app" class="app-container">
+    
+    <header class="bg-pastel-blue p-4 rounded-b-3xl shadow-sm flex justify-between items-center text-white sticky top-0 z-10">
+      <h1 class="text-xl font-bold"><i class="fa-solid fa-plane-departure mr-2"></i>紐西蘭大冒險</h1>
+      <span class="bg-white text-pastel-blue px-3 py-1 rounded-full text-sm font-bold">
+        <i v-if="isLoading" class="fa-solid fa-spinner fa-spin mr-1"></i>
+        {{ members.length }} 人同行
+      </span>
+    </header>
+
+    <main class="p-4">
+      
+      <div v-if="currentTab === 'itinerary'">
+        <h2 class="text-lg font-bold mb-3 text-pastel-blue">📅 每日行程表</h2>
+        
+        <div class="flex overflow-x-auto space-x-3 pb-3 hide-scrollbar">
+          <button v-for="day in baseDays" :key="day.date" 
+                  @click="selectedDay = day.date"
+                  :class="['flex-shrink-0 px-4 py-2 rounded-2xl font-bold transition-colors', selectedDay === day.date ? 'bg-pastel-pink text-white shadow-md' : 'bg-gray-100 text-gray-500']">
+            {{ day.title }}<br><span class="text-xs">{{ day.date }}</span>
+          </button>
+        </div>
+
+        <div v-if="currentDayInfo" class="mt-4 space-y-4">
+          <div class="flex items-center justify-between">
+            <h3 class="font-bold text-lg border-b-2 border-pastel-pink pb-1">{{ currentDayInfo.cities }}</h3>
+            <button @click="openAddModal" class="bg-pastel-green text-white w-8 h-8 rounded-full shadow hover:bg-green-400 transition-colors"><i class="fa-solid fa-plus"></i></button>
+          </div>
+          
+          <div v-if="currentDayEvents.length === 0" class="text-center text-gray-400 py-4 text-sm font-bold">目前還沒有新增行程喔！</div>
+          
+          <div v-for="event in currentDayEvents" :key="event.id" class="bg-white border-2 border-gray-100 p-4 rounded-2xl shadow-sm flex items-start space-x-4 relative">
+            <div class="bg-pastel-yellow text-gray-700 w-12 h-12 rounded-full flex items-center justify-center text-xl shadow-inner flex-shrink-0 mt-1">
+              <i class="fa-solid" :class="event.icon || 'fa-star'"></i>
+            </div>
+            <div class="flex-1 pr-6">
+              <p class="text-sm font-bold text-gray-500">{{ event.time }}</p>
+              <p class="font-bold text-lg leading-tight">{{ event.name }}</p>
+              <p class="text-sm text-gray-400 mt-1">{{ event.desc }}</p>
+              
+              <div v-if="event.note" class="mt-2 p-2 bg-blue-50 text-blue-800 text-xs rounded-lg border border-blue-100 whitespace-pre-line">
+                <i class="fa-solid fa-thumbtack mr-1"></i> {{ event.note }}
+              </div>
+              
+              <a v-if="event.gmap" :href="event.gmap" target="_blank" class="inline-block mt-3 px-3 py-1 bg-gray-100 text-gray-600 rounded-full text-xs font-bold hover:bg-pastel-yellow hover:text-gray-800 transition-colors">
+                <i class="fa-solid fa-location-dot text-red-400 mr-1"></i> Google Map 導航
+              </a>
+            </div>
+            <button @click="openEditModal(event)" class="absolute top-4 right-4 text-gray-300 hover:text-pastel-blue p-1"><i class="fa-solid fa-pen"></i></button>
+          </div>
+        </div>
+      </div>
+
+      <transition name="modal">
+        <div v-if="showEventModal" class="fixed inset-0 bg-black bg-opacity-40 z-50 flex items-center justify-center p-4">
+          <div class="bg-white rounded-3xl w-full max-w-sm p-5 shadow-2xl relative">
+            <h3 class="font-bold text-xl mb-4 text-pastel-blue border-b pb-2">
+              <i class="fa-solid fa-calendar-plus mr-2"></i>{{ isEditing ? '編輯行程' : '新增行程' }}
+            </h3>
+            
+            <div class="space-y-3">
+              <div><label class="text-xs font-bold text-gray-500">時間</label><input v-model="currentEventForm.time" type="text" class="w-full p-2 rounded-lg border border-gray-200 focus:ring-2 focus:ring-pastel-blue outline-none text-sm"></div>
+              <div><label class="text-xs font-bold text-gray-500">行程名稱 <span class="text-red-400">*</span></label><input v-model="currentEventForm.name" type="text" class="w-full p-2 rounded-lg border border-gray-200 focus:ring-2 focus:ring-pastel-blue outline-none text-sm"></div>
+              <div><label class="text-xs font-bold text-gray-500">簡短描述</label><input v-model="currentEventForm.desc" type="text" class="w-full p-2 rounded-lg border border-gray-200 focus:ring-2 focus:ring-pastel-blue outline-none text-sm"></div>
+              <div><label class="text-xs font-bold text-gray-500">Google Map 連結</label><input v-model="currentEventForm.gmap" type="text" class="w-full p-2 rounded-lg border border-gray-200 focus:ring-2 focus:ring-pastel-yellow outline-none text-sm"></div>
+              <div><label class="text-xs font-bold text-gray-500">專屬備註</label><textarea v-model="currentEventForm.note" class="w-full p-2 rounded-lg border border-gray-200 focus:ring-2 focus:ring-pastel-blue outline-none text-sm resize-none h-16"></textarea></div>
+              <div><label class="text-xs font-bold text-gray-500">圖示代碼 (例如: fa-plane)</label><input v-model="currentEventForm.icon" type="text" class="w-full p-2 rounded-lg border border-gray-200 focus:ring-2 focus:ring-pastel-blue outline-none text-sm"></div>
+            </div>
+
+            <div class="mt-6 flex justify-end space-x-2">
+              <button v-if="isEditing" @click="deleteEvent" class="px-4 py-2 bg-red-100 text-red-500 rounded-xl text-sm font-bold mr-auto hover:bg-red-200">刪除</button>
+              <button @click="showEventModal = false" class="px-4 py-2 bg-gray-100 text-gray-600 rounded-xl text-sm font-bold hover:bg-gray-200">取消</button>
+              <button @click="saveEvent" class="px-4 py-2 bg-pastel-blue text-white rounded-xl text-sm font-bold shadow hover:bg-blue-400">儲存</button>
+            </div>
+          </div>
+        </div>
+      </transition>
+
+      <div v-if="currentTab === 'accounting'">
+        <h2 class="text-lg font-bold mb-3 text-pastel-pink">💰 團體分帳系統</h2>
+        
+        <div class="bg-pastel-pink bg-opacity-20 p-4 rounded-2xl mb-6 shadow-sm border border-pastel-pink">
+          <input v-model="newExpense.name" type="text" placeholder="支出名目 (例如: 超市採買)" class="w-full mb-3 p-3 rounded-xl border border-white focus:outline-none focus:ring-2 focus:ring-pastel-pink">
+          <input v-model="newExpense.amount" type="number" placeholder="總金額" class="w-full mb-3 p-3 rounded-xl border border-white focus:outline-none focus:ring-2 focus:ring-pastel-pink">
+          
+          <div class="mb-3">
+            <label class="block text-sm font-bold text-gray-600 mb-1">付款人</label>
+            <select v-model="newExpense.payer" class="w-full p-3 rounded-xl border border-white focus:outline-none focus:ring-2 focus:ring-pastel-pink bg-white">
+              <option v-for="member in members" :value="member">{{ member }}</option>
+            </select>
+          </div>
+
+          <div class="mb-2 flex space-x-4">
+            <label class="flex items-center space-x-2 cursor-pointer">
+              <input type="radio" v-model="newExpense.splitMode" value="equal" class="text-pastel-pink focus:ring-pastel-pink">
+              <span class="text-sm font-bold text-gray-700">平分</span>
+            </label>
+            <label class="flex items-center space-x-2 cursor-pointer">
+              <input type="radio" v-model="newExpense.splitMode" value="unequal" class="text-pastel-pink focus:ring-pastel-pink">
+              <span class="text-sm font-bold text-gray-700">自訂金額</span>
+            </label>
+          </div>
+
+          <div class="mb-3">
+            <div class="flex justify-between items-center mb-1">
+              <label class="block text-sm font-bold text-gray-600">分攤成員</label>
+              <button v-if="newExpense.splitMode === 'equal'" @click="selectAllSplitters" class="text-xs text-pastel-blue font-bold hover:underline">全選 / 全不選</button>
+            </div>
+            
+            <div class="grid gap-2" :class="newExpense.splitMode === 'equal' ? 'grid-cols-3' : 'grid-cols-1'">
+              <label v-for="member in members" :key="member" class="flex items-center justify-between bg-white p-2 rounded-lg text-sm border border-transparent hover:border-pastel-pink cursor-pointer">
+                <div class="flex items-center space-x-2">
+                  <input type="checkbox" :value="member" v-model="newExpense.splitters" class="rounded text-pastel-pink focus:ring-pastel-pink">
+                  <span>{{ member }}</span>
+                </div>
+                <input v-if="newExpense.splitMode === 'unequal' && newExpense.splitters.includes(member)" 
+                       v-model.number="newExpense.customAmounts[member]" 
+                       type="number" placeholder="分攤多少" 
+                       class="w-24 p-1 pl-2 rounded border border-gray-200 focus:outline-none focus:border-pastel-pink text-xs"
+                       @click.stop>
+              </label>
+            </div>
+          </div>
+          
+          <button @click="addExpense" class="w-full bg-pastel-pink text-white font-bold py-3 rounded-xl shadow hover:bg-pink-400 transition-colors">新增這筆費用</button>
+        </div>
+
+        <h3 class="font-bold text-lg mb-3 border-b-2 border-pastel-yellow pb-1">📊 結算總覽</h3>
+        <div class="grid grid-cols-2 gap-3 mb-6">
+          <div v-for="(balance, member) in balances" :key="member" class="bg-white p-3 rounded-xl shadow-sm border border-gray-100 flex justify-between items-center">
+            <span class="font-bold">{{ member }}</span>
+            <span :class="balance >= 0 ? 'text-pastel-green' : 'text-red-400'" class="font-bold">
+              {{ balance >= 0 ? '+' : '' }}{{ Math.round(balance * 100) / 100 }}
+            </span>
+          </div>
+        </div>
+
+        <h3 class="font-bold text-lg mb-3 border-b-2 border-gray-200 pb-1 text-gray-600">📜 支出明細</h3>
+        <div class="space-y-3 mb-4">
+          <div v-if="expenses.length === 0" class="text-center text-gray-400 py-4 text-sm font-bold">目前還沒有任何支出紀錄喔！</div>
+          <div v-for="exp in expenses" :key="exp.id" class="bg-white p-4 rounded-xl shadow-sm border border-gray-100 relative pr-10">
+            <div class="flex justify-between items-start mb-1">
+              <p class="font-bold text-gray-700">{{ exp.name }}</p>
+              <p class="font-bold text-pastel-pink text-lg">${{ exp.amount }}</p>
+            </div>
+            <p class="text-xs text-gray-500 mb-1"><span class="font-bold text-gray-600">付款：</span>{{ exp.payer }}</p>
+            <p class="text-xs text-gray-500">
+              <span class="font-bold text-gray-600">分攤 ({{ exp.splitMode === 'equal' ? '平分' : '自訂金額' }})：</span>
+              <span v-if="exp.splitMode === 'equal'">{{ exp.splitters.join(', ') }}</span>
+              <span v-else>
+                <span v-for="(s, i) in exp.splitters" :key="s">
+                  {{ s }}(${{ exp.customAmounts[s] || 0 }}){{ i < exp.splitters.length - 1 ? ', ' : '' }}
+                </span>
+              </span>
+            </p>
+            <button @click="deleteExpense(exp.id)" class="absolute top-1/2 -translate-y-1/2 right-3 text-gray-300 hover:text-red-400 p-2"><i class="fa-solid fa-trash-can"></i></button>
+          </div>
+        </div>
+      </div>
+
+    </main>
+
+    <nav class="fixed bottom-0 w-full max-w-[480px] bg-white border-t border-gray-100 grid grid-cols-2 p-3 pb-6 shadow-[0_-5px_15px_rgba(0,0,0,0.05)] rounded-t-3xl">
+      <button @click="currentTab = 'itinerary'" :class="['flex flex-col items-center justify-center p-2', currentTab === 'itinerary' ? 'text-pastel-blue font-bold' : 'text-gray-400']">
+        <i class="fa-solid fa-calendar-days text-xl mb-1"></i><span class="text-xs">行程</span>
+      </button>
+      <button @click="currentTab = 'accounting'" :class="['flex flex-col items-center justify-center p-2', currentTab === 'accounting' ? 'text-pastel-pink font-bold' : 'text-gray-400']">
+        <i class="fa-solid fa-wallet text-xl mb-1"></i><span class="text-xs">記帳</span>
+      </button>
+    </nav>
+  </div>
+
+  <script>
+    // ==========================================
+    // ⚠️ 請在這裡填入你的 Supabase 專案資訊 ⚠️
+    // ==========================================
+    const SUPABASE_URL = 'https://bruaouuwminziimyoyww.supabase.co';
+    const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJydWFvdXV3bWluemlpbXlveXd3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQ1MzE0MDcsImV4cCI6MjA5MDEwNzQwN30.zL1TSFuVEugZP_WZbCvJljKAEvMQn-LhcSvR8j-H3R4';
+    
+    // 初始化 Supabase
+    const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    const { createApp, ref, computed, onMounted } = Vue;
+
+    createApp({
+      setup() {
+        const currentTab = ref('itinerary');
+        const members = ref(['彥廷', '明真', '健彰', '孟鈺', '銘義', '惟琳', '意揚']);
+        const isLoading = ref(true);
+        
+        // --- 行程基礎設定 (日期與城市固定) ---
+        const baseDays = [
+          { date: '04/01', title: 'Day 1', cities: 'TPE ✈️ HKG ✈️ AKL' },
+          { date: '04/02', title: 'Day 2', cities: 'AKL ✈️ CHC' },
+          { date: '04/03', title: 'Day 3', cities: '凱庫拉' },
+          { date: '04/04', title: 'Day 4', cities: '蒂卡波湖' },
+          { date: '04/05', title: 'Day 5', cities: '普卡基湖、庫克山' },
+          { date: '04/06', title: 'Day 6', cities: '庫克山、但尼丁' },
+          { date: '04/07', title: 'Day 7', cities: '但尼丁、蒂阿瑙' },
+          { date: '04/08', title: 'Day 8', cities: '米爾福德峽灣' },
+          { date: '04/09', title: 'Day 9', cities: '皇后鎮' },
+          { date: '04/10', title: 'Day 10', cities: '皇后鎮' },
+          { date: '04/11', title: 'Day 11', cities: '瓦納卡' },
+          { date: '04/12', title: 'Day 12', cities: '皇后鎮 ✈️ 奧克蘭' },
+          { date: '04/13', title: 'Day 13', cities: 'AKL ✈️ HKG ✈️ TPE' },
+          { date: '04/14', title: 'Day 14', cities: 'TPE' }
+        ];
+        
+        const selectedDay = ref('04/01');
+        const currentDayInfo = computed(() => baseDays.find(d => d.date === selectedDay.value));
+        
+        // 從資料庫抓來的動態資料
+        const allEvents = ref([]);
+        const expenses = ref([]);
+
+        // 依據選定日期過濾行程，並按建立時間排序
+        const currentDayEvents = computed(() => {
+          return allEvents.value.filter(e => e.date === selectedDay.value).sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
+        });
+
+        // --- 行程表單狀態 ---
+        const showEventModal = ref(false);
+        const isEditing = ref(false);
+        const currentEventForm = ref({ id: null, date: '', time: '', name: '', desc: '', gmap: '', note: '', icon: 'fa-star' });
+
+        const openAddModal = () => {
+          isEditing.value = false;
+          currentEventForm.value = { id: null, date: selectedDay.value, time: '', name: '', desc: '', gmap: '', note: '', icon: 'fa-star' };
+          showEventModal.value = true;
+        };
+
+        const openEditModal = (event) => {
+          isEditing.value = true;
+          currentEventForm.value = { ...event };
+          showEventModal.value = true;
+        };
+
+        const saveEvent = async () => {
+          if (!currentEventForm.value.name) return alert('行程名稱一定要填寫喔！');
+          isLoading.value = true;
+          
+          const eventData = {
+            date: currentEventForm.value.date,
+            time: currentEventForm.value.time,
+            name: currentEventForm.value.name,
+            desc: currentEventForm.value.desc,
+            gmap: currentEventForm.value.gmap,
+            note: currentEventForm.value.note,
+            icon: currentEventForm.value.icon
+          };
+
+          if (isEditing.value) {
+            await supabase.from('events').update(eventData).eq('id', currentEventForm.value.id);
+          } else {
+            await supabase.from('events').insert([eventData]);
+          }
+          
+          showEventModal.value = false;
+          isLoading.value = false;
+        };
+
+        const deleteEvent = async () => {
+          if (confirm('確定要刪除這個行程嗎？')) {
+            isLoading.value = true;
+            await supabase.from('events').delete().eq('id', currentEventForm.value.id);
+            showEventModal.value = false;
+            isLoading.value = false;
+          }
+        };
+
+        // --- 記帳狀態 ---
+        const newExpense = ref({ name: '', amount: null, payer: '彥廷', splitMode: 'equal', splitters: [], customAmounts: {} });
+
+        const selectAllSplitters = () => {
+          if (newExpense.value.splitters.length === members.value.length) {
+            newExpense.value.splitters = [];
+          } else {
+            newExpense.value.splitters = [...members.value];
+          }
+        };
+
+        const addExpense = async () => {
+          if (!newExpense.value.name || !newExpense.value.amount || newExpense.value.splitters.length === 0) {
+            return alert('請填寫完整資訊並選擇至少一位分攤成員！');
+          }
+
+          let expenseRecord = { 
+            name: newExpense.value.name,
+            amount: Number(newExpense.value.amount),
+            payer: newExpense.value.payer,
+            splitMode: newExpense.value.splitMode,
+            splitters: newExpense.value.splitters,
+            customAmounts: newExpense.value.customAmounts 
+          };
+
+          if (expenseRecord.splitMode === 'unequal') {
+            let sum = 0;
+            expenseRecord.splitters.forEach(s => { sum += (Number(expenseRecord.customAmounts[s]) || 0); });
+            if (sum !== expenseRecord.amount) {
+              return alert(`分攤金額加總 (${sum}) 不等於總金額 (${expenseRecord.amount}) 喔！請再檢查一下。`);
+            }
+          }
+
+          isLoading.value = true;
+          await supabase.from('expenses').insert([expenseRecord]);
+          newExpense.value = { name: '', amount: null, payer: '彥廷', splitMode: 'equal', splitters: [], customAmounts: {} };
+          isLoading.value = false;
+        };
+
+        const deleteExpense = async (id) => {
+          if (confirm('確定要刪除這筆帳目嗎？')) {
+            isLoading.value = true;
+            await supabase.from('expenses').delete().eq('id', id);
+            isLoading.value = false;
+          }
+        };
+
+        const balances = computed(() => {
+          let b = {};
+          members.value.forEach(m => b[m] = 0);
+          expenses.value.forEach(ex => {
+            b[ex.payer] += Number(ex.amount);
+            if (ex.splitMode === 'equal') {
+              const splitAmount = Number(ex.amount) / ex.splitters.length;
+              ex.splitters.forEach(s => b[s] -= splitAmount);
+            } else {
+              ex.splitters.forEach(s => { b[s] -= (Number(ex.customAmounts[s]) || 0); });
+            }
+          });
+          return b;
+        });
+
+        // --- 初始化與即時同步 (Realtime) ---
+        const fetchData = async () => {
+          const [eventsRes, expensesRes] = await Promise.all([
+            supabase.from('events').select('*'),
+            supabase.from('expenses').select('*').order('created_at', { ascending: false })
+          ]);
+          if (eventsRes.data) allEvents.value = eventsRes.data;
+          if (expensesRes.data) expenses.value = expensesRes.data;
+          isLoading.value = false;
+        };
+
+        onMounted(() => {
+          fetchData();
+          
+          // 訂閱資料庫變更，達到真正的「即時共同編輯」
+          supabase.channel('public:all')
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'events' }, fetchData)
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'expenses' }, fetchData)
+            .subscribe();
+        });
+
+        return { 
+          currentTab, members, baseDays, selectedDay, currentDayInfo, currentDayEvents,
+          showEventModal, currentEventForm, isEditing, openAddModal, openEditModal, saveEvent, deleteEvent,
+          newExpense, addExpense, deleteExpense, balances, expenses, selectAllSplitters, isLoading 
+        };
+      }
+    }).mount('#app');
+  </script>
+</body>
+</html>
