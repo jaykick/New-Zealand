@@ -33,8 +33,14 @@
       </span>
     </header>
 
+    <div v-if="!isCloudMode" class="bg-yellow-100 text-yellow-700 text-xs text-center py-2 font-bold">
+      ⚠️ 目前為單機預覽模式，資料不會同步至雲端喔！
+    </div>
+    <div v-else-if="cloudConnected" class="bg-green-100 text-green-700 text-xs text-center py-1 font-bold">
+      ☁️ 已連線至雲端共編模式
+    </div>
+
     <main class="p-4">
-      
       <div v-if="currentTab === 'itinerary'">
         <h2 class="text-lg font-bold mb-3 text-pastel-blue">📅 每日行程表</h2>
         
@@ -103,18 +109,15 @@
 
       <div v-if="currentTab === 'accounting'">
         <h2 class="text-lg font-bold mb-3 text-pastel-pink">💰 團體分帳系統</h2>
-        
         <div class="bg-pastel-pink bg-opacity-20 p-4 rounded-2xl mb-6 shadow-sm border border-pastel-pink">
           <input v-model="newExpense.name" type="text" placeholder="支出名目 (例如: 超市採買)" class="w-full mb-3 p-3 rounded-xl border border-white focus:outline-none focus:ring-2 focus:ring-pastel-pink">
           <input v-model="newExpense.amount" type="number" placeholder="總金額" class="w-full mb-3 p-3 rounded-xl border border-white focus:outline-none focus:ring-2 focus:ring-pastel-pink">
-          
           <div class="mb-3">
             <label class="block text-sm font-bold text-gray-600 mb-1">付款人</label>
             <select v-model="newExpense.payer" class="w-full p-3 rounded-xl border border-white focus:outline-none focus:ring-2 focus:ring-pastel-pink bg-white">
               <option v-for="member in members" :value="member">{{ member }}</option>
             </select>
           </div>
-
           <div class="mb-2 flex space-x-4">
             <label class="flex items-center space-x-2 cursor-pointer">
               <input type="radio" v-model="newExpense.splitMode" value="equal" class="text-pastel-pink focus:ring-pastel-pink">
@@ -125,13 +128,11 @@
               <span class="text-sm font-bold text-gray-700">自訂金額</span>
             </label>
           </div>
-
           <div class="mb-3">
             <div class="flex justify-between items-center mb-1">
               <label class="block text-sm font-bold text-gray-600">分攤成員</label>
               <button v-if="newExpense.splitMode === 'equal'" @click="selectAllSplitters" class="text-xs text-pastel-blue font-bold hover:underline">全選 / 全不選</button>
             </div>
-            
             <div class="grid gap-2" :class="newExpense.splitMode === 'equal' ? 'grid-cols-3' : 'grid-cols-1'">
               <label v-for="member in members" :key="member" class="flex items-center justify-between bg-white p-2 rounded-lg text-sm border border-transparent hover:border-pastel-pink cursor-pointer">
                 <div class="flex items-center space-x-2">
@@ -139,14 +140,11 @@
                   <span>{{ member }}</span>
                 </div>
                 <input v-if="newExpense.splitMode === 'unequal' && newExpense.splitters.includes(member)" 
-                       v-model.number="newExpense.customAmounts[member]" 
-                       type="number" placeholder="分攤多少" 
-                       class="w-24 p-1 pl-2 rounded border border-gray-200 focus:outline-none focus:border-pastel-pink text-xs"
-                       @click.stop>
+                       v-model.number="newExpense.customAmounts[member]" type="number" placeholder="分攤多少" 
+                       class="w-24 p-1 pl-2 rounded border border-gray-200 focus:outline-none focus:border-pastel-pink text-xs" @click.stop>
               </label>
             </div>
           </div>
-          
           <button @click="addExpense" class="w-full bg-pastel-pink text-white font-bold py-3 rounded-xl shadow hover:bg-pink-400 transition-colors">新增這筆費用</button>
         </div>
 
@@ -154,9 +152,7 @@
         <div class="grid grid-cols-2 gap-3 mb-6">
           <div v-for="(balance, member) in balances" :key="member" class="bg-white p-3 rounded-xl shadow-sm border border-gray-100 flex justify-between items-center">
             <span class="font-bold">{{ member }}</span>
-            <span :class="balance >= 0 ? 'text-pastel-green' : 'text-red-400'" class="font-bold">
-              {{ balance >= 0 ? '+' : '' }}{{ Math.round(balance * 100) / 100 }}
-            </span>
+            <span :class="balance >= 0 ? 'text-pastel-green' : 'text-red-400'" class="font-bold">{{ balance >= 0 ? '+' : '' }}{{ Math.round(balance * 100) / 100 }}</span>
           </div>
         </div>
 
@@ -173,16 +169,13 @@
               <span class="font-bold text-gray-600">分攤 ({{ exp.splitMode === 'equal' ? '平分' : '自訂金額' }})：</span>
               <span v-if="exp.splitMode === 'equal'">{{ exp.splitters.join(', ') }}</span>
               <span v-else>
-                <span v-for="(s, i) in exp.splitters" :key="s">
-                  {{ s }}(${{ exp.customAmounts[s] || 0 }}){{ i < exp.splitters.length - 1 ? ', ' : '' }}
-                </span>
+                <span v-for="(s, i) in exp.splitters" :key="s">{{ s }}(${{ exp.customAmounts[s] || 0 }}){{ i < exp.splitters.length - 1 ? ', ' : '' }}</span>
               </span>
             </p>
             <button @click="deleteExpense(exp.id)" class="absolute top-1/2 -translate-y-1/2 right-3 text-gray-300 hover:text-red-400 p-2"><i class="fa-solid fa-trash-can"></i></button>
           </div>
         </div>
       </div>
-
     </main>
 
     <nav class="fixed bottom-0 w-full max-w-[480px] bg-white border-t border-gray-100 grid grid-cols-2 p-3 pb-6 shadow-[0_-5px_15px_rgba(0,0,0,0.05)] rounded-t-3xl">
@@ -197,52 +190,129 @@
 
   <script>
     // ==========================================
-    // ⚠️ 請在這裡填入你的 Supabase 專案資訊 ⚠️
+    // 🚀 已經為您填妥的 Supabase 專案資訊
     // ==========================================
-    const SUPABASE_URL = 'https://bruaouuwminziimyoyww.supabase.co';
-    const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJydWFvdXV3bWluemlpbXlveXd3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQ1MzE0MDcsImV4cCI6MjA5MDEwNzQwN30.zL1TSFuVEugZP_WZbCvJljKAEvMQn-LhcSvR8j-H3R4';
+    const SUPABASE_URL = 'https://bruaouuwminziimyoyww.supabase.co'; 
+    const SUPABASE_ANON_KEY = 'sb_publishable_9dq_CJYFBiJSpKegZk0Uhg_h6Vrkq1t';
     
-    // 初始化 Supabase
-    const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    const isCloudMode = SUPABASE_URL.startsWith('http') && SUPABASE_ANON_KEY.startsWith('sb_publishable_');
+    let supabase = null;
+    
+    try {
+      if (isCloudMode) {
+        supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+      }
+    } catch (e) {
+      console.warn("Supabase 設定錯誤，切換至單機模式。");
+    }
+
     const { createApp, ref, computed, onMounted } = Vue;
 
     createApp({
       setup() {
         const currentTab = ref('itinerary');
         const members = ref(['彥廷', '明真', '健彰', '孟鈺', '銘義', '惟琳', '意揚']);
-        const isLoading = ref(true);
+        const isLoading = ref(false);
+        const cloudConnected = ref(false);
         
-        // --- 行程基礎設定 (日期與城市固定) ---
         const baseDays = [
-          { date: '04/01', title: 'Day 1', cities: 'TPE ✈️ HKG ✈️ AKL' },
-          { date: '04/02', title: 'Day 2', cities: 'AKL ✈️ CHC' },
-          { date: '04/03', title: 'Day 3', cities: '凱庫拉' },
-          { date: '04/04', title: 'Day 4', cities: '蒂卡波湖' },
-          { date: '04/05', title: 'Day 5', cities: '普卡基湖、庫克山' },
-          { date: '04/06', title: 'Day 6', cities: '庫克山、但尼丁' },
-          { date: '04/07', title: 'Day 7', cities: '但尼丁、蒂阿瑙' },
-          { date: '04/08', title: 'Day 8', cities: '米爾福德峽灣' },
-          { date: '04/09', title: 'Day 9', cities: '皇后鎮' },
-          { date: '04/10', title: 'Day 10', cities: '皇后鎮' },
-          { date: '04/11', title: 'Day 11', cities: '瓦納卡' },
-          { date: '04/12', title: 'Day 12', cities: '皇后鎮 ✈️ 奧克蘭' },
-          { date: '04/13', title: 'Day 13', cities: 'AKL ✈️ HKG ✈️ TPE' },
-          { date: '04/14', title: 'Day 14', cities: 'TPE' }
+          { date: '04/01', title: 'Day 1', cities: 'TPE ✈️ HKG ✈️ AKL' }, { date: '04/02', title: 'Day 2', cities: 'AKL ✈️ CHC' },
+          { date: '04/03', title: 'Day 3', cities: '凱庫拉' }, { date: '04/04', title: 'Day 4', cities: '蒂卡波湖' },
+          { date: '04/05', title: 'Day 5', cities: '普卡基湖、庫克山' }, { date: '04/06', title: 'Day 6', cities: '庫克山、但尼丁' },
+          { date: '04/07', title: 'Day 7', cities: '但尼丁、蒂阿瑙' }, { date: '04/08', title: 'Day 8', cities: '米爾福德峽灣' },
+          { date: '04/09', title: 'Day 9', cities: '皇后鎮' }, { date: '04/10', title: 'Day 10', cities: '皇后鎮' },
+          { date: '04/11', title: 'Day 11', cities: '瓦納卡' }, { date: '04/12', title: 'Day 12', cities: '皇后鎮 ✈️ 奧克蘭' },
+          { date: '04/13', title: 'Day 13', cities: 'AKL ✈️ HKG ✈️ TPE' }, { date: '04/14', title: 'Day 14', cities: 'TPE' }
         ];
         
         const selectedDay = ref('04/01');
         const currentDayInfo = computed(() => baseDays.find(d => d.date === selectedDay.value));
         
-        // 從資料庫抓來的動態資料
-        const allEvents = ref([]);
+        // 單機版預設超完整行程資料 (如果雲端為空，會以此為基礎)
+        const allEvents = ref([
+          { id: '1', date: '04/01', time: '13:20 - 15:25', name: '桃園飛往香港', desc: 'TPE - HKG', gmap: 'https://www.google.com/maps/search/?api=1&query=桃園國際機場', note: '國泰航空 CX495\n第 1 航廈 (Terminal 1)', icon: 'fa-plane-departure', created_at: '2026-04-01T00:00:00Z' },
+          { id: '2', date: '04/01', time: '21:05 - 12:40(+1)', name: '香港飛往奧克蘭', desc: 'HKG - AKL (週四抵達)', gmap: 'https://www.google.com/maps/search/?api=1&query=香港國際機場', note: '國泰航空 CX113\n第 1 航廈 (Terminal 1)', icon: 'fa-plane', created_at: '2026-04-01T00:01:00Z' },
+          { id: '3', date: '04/02', time: '12:40', name: '抵達奧克蘭', desc: '', gmap: 'https://www.google.com/maps/search/?api=1&query=奧克蘭機場', note: '', icon: 'fa-plane-arrival', created_at: '2026-04-02T00:00:00Z' },
+          { id: '4', date: '04/02', time: '16:10 - 17:35', name: '國內線前往基督城', desc: 'AKL - CHC', gmap: 'https://www.google.com/maps/search/?api=1&query=基督城機場', note: '捷星航空 JQ237\n訂位代號: XLTMWS', icon: 'fa-plane-arrival', created_at: '2026-04-02T00:01:00Z' },
+          { id: '5', date: '04/02', time: '晚上', name: '新攝政街', desc: 'New Regent Street Precinct', gmap: 'https://www.google.com/maps/search/?api=1&query=New+Regent+Street', note: '', icon: 'fa-moon', created_at: '2026-04-02T00:02:00Z' },
+          { id: '6', date: '04/02', time: '住宿', name: 'City Sanctuary on Kilmore', desc: '基督城', gmap: 'https://www.google.com/maps/search/?api=1&query=City+Sanctuary+on+Kilmore', note: '', icon: 'fa-bed', created_at: '2026-04-02T00:03:00Z' },
+          { id: '7', date: '04/02', time: '餐廳候補', name: 'Unknown Chapter Coffee Roasters', desc: '', gmap: 'https://www.google.com/maps/search/?api=1&query=Unknown+Chapter+Coffee+Roasters', note: '', icon: 'fa-mug-hot', created_at: '2026-04-02T00:04:00Z' },
+          { id: '8', date: '04/02', time: '餐廳候補', name: 'Bohemian Bakery Cafe', desc: '', gmap: 'https://www.google.com/maps/search/?api=1&query=Bohemian+Bakery+Cafe', note: '', icon: 'fa-bread-slice', created_at: '2026-04-02T00:05:00Z' },
+          { id: '9', date: '04/02', time: '餐廳候補', name: 'Amazonita', desc: '', gmap: 'https://www.google.com/maps/search/?api=1&query=Amazonita', note: '', icon: 'fa-utensils', created_at: '2026-04-02T00:06:00Z' },
+          { id: '10', date: '04/03', time: '11:15', name: '賞鯨、海豚', desc: '', gmap: 'https://www.google.com/maps/search/?api=1&query=Whale+Watch+Kaikoura', note: '', icon: 'fa-anchor', created_at: '2026-04-03T00:00:00Z' },
+          { id: '11', date: '04/03', time: '下午', name: 'Point Kean Viewpoint', desc: 'Kaikoura Seal Colony', gmap: 'https://www.google.com/maps/search/?api=1&query=Point+Kean+Viewpoint', note: '', icon: 'fa-camera', created_at: '2026-04-03T00:01:00Z' },
+          { id: '12', date: '04/03', time: '下午', name: 'Kaikoura Seal Colony', desc: '', gmap: 'https://www.google.com/maps/search/?api=1&query=Kaikoura+Seal+Colony', note: '', icon: 'fa-camera', created_at: '2026-04-03T00:02:00Z' },
+          { id: '13', date: '04/03', time: '晚餐', name: '吃海鮮', desc: '', gmap: '', note: '', icon: 'fa-fish', created_at: '2026-04-03T00:03:00Z' },
+          { id: '14', date: '04/03', time: '住宿', name: 'City Sanctuary on Kilmore', desc: '基督城', gmap: 'https://www.google.com/maps/search/?api=1&query=City+Sanctuary+on+Kilmore', note: '', icon: 'fa-bed', created_at: '2026-04-03T00:04:00Z' },
+          { id: '15', date: '04/04', time: '09:00 - 15:00', name: 'Fairlie Bakehouse', desc: '3hr drive', gmap: 'https://www.google.com/maps/search/?api=1&query=Fairlie+Bakehouse', note: '', icon: 'fa-car', created_at: '2026-04-04T00:00:00Z' },
+          { id: '16', date: '04/04', time: '咖啡廳', name: 'Astro Cafe', desc: '', gmap: 'https://www.google.com/maps/search/?api=1&query=Astro+Cafe+Tekapo', note: '', icon: 'fa-mug-hot', created_at: '2026-04-04T00:01:00Z' },
+          { id: '17', date: '04/04', time: '午餐', name: 'The Greedy Cow Cafe', desc: '', gmap: 'https://maps.app.goo.gl/tZsrBTkoJ1Qdj2zF9。4/5晚餐為飯店的buffet，跟餐廳候補Mint', note: '', icon: 'fa-burger', created_at: '2026-04-04T00:02:00Z' },
+          { id: '18', date: '04/04', time: '下午', name: '好牧羊人教堂', desc: '', gmap: 'https://www.google.com/maps/search/?api=1&query=Church+of+the+Good+Shepherd', note: '', icon: 'fa-church', created_at: '2026-04-04T00:03:00Z' },
+          { id: '19', date: '04/04', time: '點心', name: 'The Better Batter', desc: '炸魚薯條', gmap: 'https://www.google.com/maps/search/?api=1&query=The+Better+Batter+Tekapo', note: '', icon: 'fa-fish', created_at: '2026-04-04T00:04:00Z' },
+          { id: '20', date: '04/04', time: '採買', name: 'Four Square Tekapo', desc: '當地超市', gmap: 'https://www.google.com/maps/search/?api=1&query=Four+Square+Tekapo', note: '', icon: 'fa-cart-shopping', created_at: '2026-04-04T00:05:00Z' },
+          { id: '21', date: '04/04', time: '20:45 - 22:15', name: '觀星', desc: '', gmap: 'https://maps.app.goo.gl/gyKwgUjpWyeAZZt9A、The', note: '', icon: 'fa-star', created_at: '2026-04-04T00:06:00Z' },
+          { id: '22', date: '04/04', time: '住宿', name: 'Fivestone Lodge', desc: '蒂卡波湖', gmap: 'https://www.google.com/maps/search/?api=1&query=Fivestone+Lodge', note: '', icon: 'fa-bed', created_at: '2026-04-04T00:07:00Z' },
+          { id: '23', date: '04/05', time: '早上', name: '普卡基湖觀景點', desc: 'Lake Pukaki', gmap: 'https://www.google.com/maps/search/?api=1&query=Lake+Pukaki', note: '', icon: 'fa-mountain-sun', created_at: '2026-04-05T00:00:00Z' },
+          { id: '24', date: '04/05', time: '景點', name: 'Peter\'s Lookout', desc: '', gmap: 'https://www.google.com/maps/search/?api=1&query=Peter%27s+Lookout', note: '', icon: 'fa-camera', created_at: '2026-04-05T00:01:00Z' },
+          { id: '25', date: '04/05', time: '午餐', name: 'Alpine Salmon Shop', desc: '', gmap: 'https://www.google.com/maps/search/?api=1&query=Alpine+Salmon+Shop', note: '', icon: 'fa-fish', created_at: '2026-04-05T00:02:00Z' },
+          { id: '26', date: '04/05', time: '13:30', name: 'Hooker Valley Track', desc: '健行或直升機', gmap: 'https://www.google.com/maps/search/?api=1&query=Hooker+Valley+Track', note: '', icon: 'fa-person-hiking', created_at: '2026-04-05T00:03:00Z' },
+          { id: '27', date: '04/05', time: '18:00', name: 'Buffet 晚餐', desc: '', gmap: '', note: '', icon: 'fa-utensils', created_at: '2026-04-05T00:04:00Z' },
+          { id: '28', date: '04/05', time: '餐廳候補', name: 'Mint Folk & Co', desc: '', gmap: 'https://maps.app.goo.gl/ZJVLMZ6Vgoh92SDn6', note: '', icon: 'fa-utensils', created_at: '2026-04-05T00:05:00Z' },
+          { id: '29', date: '04/05', time: '15:00', name: 'Check in', desc: 'The Hermitage Hotel', gmap: 'https://www.google.com/maps/search/?api=1&query=The+Hermitage+Hotel+Mt+Cook', note: '', icon: 'fa-bed', created_at: '2026-04-05T00:06:00Z' },
+          { id: '30', date: '04/06', time: '早上', name: '冰山健行或直升機', desc: '如果前一天被取消', gmap: '', note: '', icon: 'fa-person-hiking', created_at: '2026-04-06T00:00:00Z' },
+          { id: '31', date: '04/06', time: '下午', name: '前往但尼丁', desc: '4hr drive', gmap: '', note: '', icon: 'fa-car', created_at: '2026-04-06T00:01:00Z' },
+          { id: '32', date: '04/06', time: '晚上', name: '鮑德溫街', desc: '世界最陡街道', gmap: 'https://www.google.com/maps/search/?api=1&query=Baldwin+Street+Dunedin', note: '', icon: 'fa-road', created_at: '2026-04-06T00:02:00Z' },
+          { id: '33', date: '04/06', time: '晚上', name: '但尼丁火車站', desc: '', gmap: 'https://www.google.com/maps/search/?api=1&query=Dunedin+Railway+Station', note: '', icon: 'fa-train', created_at: '2026-04-06T00:03:00Z' },
+          { id: '34', date: '04/06', time: '晚上', name: '第一教堂', desc: '', gmap: 'https://www.google.com/maps/search/?api=1&query=First+Church+of+Otago', note: '', icon: 'fa-church', created_at: '2026-04-06T00:04:00Z' },
+          { id: '35', date: '04/06', time: '住宿', name: '但尼丁 Dunedin', desc: '', gmap: '', note: '', icon: 'fa-bed', created_at: '2026-04-06T00:05:00Z' },
+          { id: '36', date: '04/06', time: '餐廳候補', name: 'Etrusco at the Savoy', desc: '', gmap: 'https://www.google.com/maps/search/?api=1&query=Etrusco+at+the+Savoy', note: '', icon: 'fa-utensils', created_at: '2026-04-06T00:06:00Z' },
+          { id: '37', date: '04/06', time: '餐廳候補', name: 'Emerson\'s Brewery', desc: '', gmap: 'https://www.google.com/maps/search/?api=1&query=Emerson%27s+Brewery', note: '', icon: 'fa-beer-mug-empty', created_at: '2026-04-06T00:07:00Z' },
+          { id: '38', date: '04/07', time: '09:00–17:00', name: 'Tunnel Beach', desc: '隧道海灘步道', gmap: 'https://www.google.com/maps/search/?api=1&query=Tunnel+Beach', note: '', icon: 'fa-water', created_at: '2026-04-07T00:00:00Z' },
+          { id: '39', date: '04/07', time: '12:00', name: 'Royal Albatross Centre', desc: '皇家信天翁中心 (closes at 4PM)', gmap: 'https://www.google.com/maps/search/?api=1&query=Royal+Albatross+Centre', note: '', icon: 'fa-crow', created_at: '2026-04-07T00:01:00Z' },
+          { id: '40', date: '04/07', time: '14:30', name: 'Monarch Wildlife Cruises', desc: '生態遊船', gmap: 'https://www.google.com/maps/search/?api=1&query=Monarch+Wildlife+Cruises', note: '', icon: 'fa-ship', created_at: '2026-04-07T00:02:00Z' },
+          { id: '41', date: '04/07', time: '晚上', name: '前往蒂阿瑙', desc: '4hr drive', gmap: '', note: '', icon: 'fa-car', created_at: '2026-04-07T00:03:00Z' },
+          { id: '42', date: '04/07', time: '住宿', name: 'Luxury on Luxmore', desc: '蒂阿瑙', gmap: 'https://www.google.com/maps/search/?api=1&query=Luxury+on+Luxmore+Te+Anau', note: '', icon: 'fa-bed', created_at: '2026-04-07T00:04:00Z' },
+          { id: '43', date: '04/08', time: '早上', name: '前往米爾福德峽灣', desc: '2hr drive', gmap: '', note: '', icon: 'fa-car', created_at: '2026-04-08T00:00:00Z' },
+          { id: '44', date: '04/08', time: '11:15', name: 'Milford Sound Cruise', desc: '米爾福德峽灣遊船', gmap: 'https://www.google.com/maps/search/?api=1&query=Milford+Sound+Cruise+Terminal', note: '', icon: 'fa-ship', created_at: '2026-04-08T00:01:00Z' },
+          { id: '45', date: '04/08', time: '下午', name: 'Mirror Lakes', desc: '鏡湖', gmap: 'https://www.google.com/maps/search/?api=1&query=Mirror+Lakes+New+Zealand', note: '', icon: 'fa-camera', created_at: '2026-04-08T00:02:00Z' },
+          { id: '46', date: '04/08', time: '下午', name: 'Eglinton Valley', desc: '埃格林頓山谷', gmap: 'https://www.google.com/maps/search/?api=1&query=Eglinton+Valley', note: '', icon: 'fa-mountain', created_at: '2026-04-08T00:03:00Z' },
+          { id: '47', date: '04/08', time: '17:45', name: 'Te Anau Glowworm Caves', desc: '螢火蟲洞 (2hr)', gmap: 'https://www.google.com/maps/search/?api=1&query=Te+Anau+Glowworm+Caves', note: '', icon: 'fa-bug', created_at: '2026-04-08T00:04:00Z' },
+          { id: '48', date: '04/08', time: '住宿', name: 'Luxury on Luxmore', desc: '蒂阿瑙', gmap: 'https://www.google.com/maps/search/?api=1&query=Luxury+on+Luxmore+Te+Anau', note: '', icon: 'fa-bed', created_at: '2026-04-08T00:05:00Z' },
+          { id: '49', date: '04/09', time: '12:00', name: 'NZONE Skydive', desc: '跳傘 (3hr)', gmap: 'https://www.google.com/maps/search/?api=1&query=NZONE+Skydive+Queenstown', note: '', icon: 'fa-parachute-box', created_at: '2026-04-09T00:00:00Z' },
+          { id: '50', date: '04/09', time: '下午', name: '鹿園 Deer Park Heights', desc: '', gmap: 'https://www.google.com/maps/search/?api=1&query=Deer+Park+Heights', note: '', icon: 'fa-deer', created_at: '2026-04-09T00:01:00Z' },
+          { id: '51', date: '04/09', time: '住宿', name: '皇后鎮', desc: '', gmap: '', note: '', icon: 'fa-bed', created_at: '2026-04-09T00:02:00Z' },
+          { id: '52', date: '04/09', time: '餐廳候補', name: 'Amisfield Bistro', desc: '', gmap: 'https://www.google.com/maps/search/?api=1&query=Amisfield+Bistro', note: '', icon: 'fa-wine-glass', created_at: '2026-04-09T00:03:00Z' },
+          { id: '53', date: '04/09', time: '餐廳候補', name: 'Anita gelato', desc: '', gmap: 'https://www.google.com/maps/search/?api=1&query=Anita+gelato', note: '', icon: 'fa-ice-cream', created_at: '2026-04-09T00:04:00Z' },
+          { id: '54', date: '04/09', time: '餐廳候補', name: 'Fergburger', desc: '第一名漢堡', gmap: 'https://www.google.com/maps/search/?api=1&query=Fergburger', note: '', icon: 'fa-burger', created_at: '2026-04-09T00:05:00Z' },
+          { id: '55', date: '04/09', time: '餐廳候補', name: 'Patagonia Chocolates', desc: '', gmap: 'https://www.google.com/maps/search/?api=1&query=Patagonia+Chocolates', note: '', icon: 'fa-cookie', created_at: '2026-04-09T00:06:00Z' },
+          { id: '56', date: '04/10', time: '全日', name: 'Glenorchy Scenic Drive', desc: 'Glenorchy-Queenstown Road', gmap: '', note: '', icon: 'fa-car', created_at: '2026-04-10T00:00:00Z' },
+          { id: '57', date: '04/10', time: '15:00', name: 'TSS Earnslaw 蒸汽船', desc: 'TSS 厄恩斯勞號', gmap: 'https://www.google.com/maps/search/?api=1&query=TSS+Earnslaw', note: '', icon: 'fa-ship', created_at: '2026-04-10T00:01:00Z' },
+          { id: '58', date: '04/10', time: '景點', name: 'Skyline Queenstown', desc: '纜車與 Luge', gmap: 'https://www.google.com/maps/search/?api=1&query=Skyline+Queenstown', note: '', icon: 'fa-cable-car', created_at: '2026-04-10T00:02:00Z' },
+          { id: '59', date: '04/10', time: '住宿', name: '皇后鎮', desc: '', gmap: '', note: '', icon: 'fa-bed', created_at: '2026-04-10T00:03:00Z' },
+          { id: '60', date: '04/10', time: '餐廳候補', name: 'NEST 美景咖啡廳', desc: '(07:00–11:00)(16:00–22:00)', gmap: '', note: '', icon: 'fa-mug-hot', created_at: '2026-04-10T00:04:00Z' },
+          { id: '61', date: '04/11', time: '早上', name: 'That Wanaka Tree', desc: '瓦納卡樹', gmap: 'https://www.google.com/maps/search/?api=1&query=That+Wanaka+Tree', note: '', icon: 'fa-tree', created_at: '2026-04-11T00:00:00Z' },
+          { id: '62', date: '04/11', time: '早上', name: 'Roys Peak Track', desc: '健行步道', gmap: 'https://www.google.com/maps/search/?api=1&query=Roys+Peak+Track', note: '', icon: 'fa-person-hiking', created_at: '2026-04-11T00:01:00Z' },
+          { id: '63', date: '04/11', time: '行程', name: 'Rippon Vineyard', desc: '', gmap: '', note: '', icon: 'fa-wine-glass', created_at: '2026-04-11T00:02:00Z' },
+          { id: '64', date: '04/11', time: '下午', name: 'Crown Range Road Scenic Lookout', desc: '皇冠山脈景觀台', gmap: 'https://www.google.com/maps/search/?api=1&query=Crown+Range+Road+Scenic+Lookout', note: '', icon: 'fa-camera', created_at: '2026-04-11T00:03:00Z' },
+          { id: '65', date: '04/11', time: '住宿', name: '皇后鎮', desc: '', gmap: '', note: '', icon: 'fa-bed', created_at: '2026-04-11T00:04:00Z' },
+          { id: '66', date: '04/11', time: '餐廳候補', name: 'Francesca Arrowtown', desc: 'Bakery', gmap: 'https://www.google.com/maps/search/?api=1&query=Francesca+Arrowtown', note: '', icon: 'fa-pizza-slice', created_at: '2026-04-11T00:05:00Z' },
+          { id: '67', date: '04/11', time: '餐廳候補', name: 'Arrowtown Bakery', desc: '', gmap: 'https://www.google.com/maps/search/?api=1&query=Arrowtown+Bakery', note: '', icon: 'fa-bread-slice', created_at: '2026-04-11T00:06:00Z' },
+          { id: '68', date: '04/11', time: '餐廳候補', name: 'Wolf Coffee Roasters', desc: '', gmap: 'https://www.google.com/maps/search/?api=1&query=Wolf+Coffee+Roasters', note: '', icon: 'fa-mug-hot', created_at: '2026-04-11T00:07:00Z' },
+          { id: '69', date: '04/12', time: '早上', name: '箭鎮 (Arrowtown)', desc: '', gmap: 'https://www.google.com/maps/search/?api=1&query=Arrowtown', note: '', icon: 'fa-house', created_at: '2026-04-12T00:00:00Z' },
+          { id: '70', date: '04/12', time: '早上', name: '格林諾奇 (Glenorchy)', desc: '', gmap: 'https://www.google.com/maps/search/?api=1&query=Glenorchy', note: '', icon: 'fa-tree', created_at: '2026-04-12T00:01:00Z' },
+          { id: '71', date: '04/12', time: '行程', name: 'Glenorchy Wharf', desc: 'Glenorchy Animal Experience shotover (快艇)', gmap: '', note: '', icon: 'fa-water', created_at: '2026-04-12T00:02:00Z' },
+          { id: '72', date: '04/12', time: '17:30 - 19:20', name: '飛往奧克蘭', desc: 'ZQN - AKL', gmap: '', note: '捷星航空 JQ298\n訂位代號: PSGD9X', icon: 'fa-plane', created_at: '2026-04-12T00:03:00Z' },
+          { id: '73', date: '04/12', time: '住宿', name: 'ibis budget Auckland Airport', desc: '奧克蘭', gmap: 'https://www.google.com/maps/search/?api=1&query=ibis+budget+Auckland+Airport', note: '', icon: 'fa-bed', created_at: '2026-04-12T00:04:00Z' },
+          { id: '74', date: '04/13', time: '13:25 - 21:05', name: '奧克蘭飛往香港', desc: 'AKL - HKG', gmap: '', note: '國泰航空 CX198\nI 航廈', icon: 'fa-plane-departure', created_at: '2026-04-13T00:00:00Z' },
+          { id: '75', date: '04/13', time: '22:50 - 00:35(+1)', name: '香港飛往台灣', desc: 'HKG - TPE', gmap: '', note: '國泰航空 CX408\n第 1 航廈', icon: 'fa-plane', created_at: '2026-04-13T00:01:00Z' },
+          { id: '76', date: '04/14', time: '00:35', name: '抵達台灣', desc: '結束美好旅程', gmap: '', note: '', icon: 'fa-house-chimney', created_at: '2026-04-14T00:00:00Z' }
+        ]);
         const expenses = ref([]);
 
-        // 依據選定日期過濾行程，並按建立時間排序
         const currentDayEvents = computed(() => {
           return allEvents.value.filter(e => e.date === selectedDay.value).sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
         });
 
-        // --- 行程表單狀態 ---
         const showEventModal = ref(false);
         const isEditing = ref(false);
         const currentEventForm = ref({ id: null, date: '', time: '', name: '', desc: '', gmap: '', note: '', icon: 'fa-star' });
@@ -261,38 +331,45 @@
 
         const saveEvent = async () => {
           if (!currentEventForm.value.name) return alert('行程名稱一定要填寫喔！');
-          isLoading.value = true;
           
           const eventData = {
-            date: currentEventForm.value.date,
-            time: currentEventForm.value.time,
-            name: currentEventForm.value.name,
-            desc: currentEventForm.value.desc,
-            gmap: currentEventForm.value.gmap,
-            note: currentEventForm.value.note,
-            icon: currentEventForm.value.icon
+            date: currentEventForm.value.date, time: currentEventForm.value.time,
+            name: currentEventForm.value.name, desc: currentEventForm.value.desc,
+            gmap: currentEventForm.value.gmap, note: currentEventForm.value.note, icon: currentEventForm.value.icon
           };
 
-          if (isEditing.value) {
-            await supabase.from('events').update(eventData).eq('id', currentEventForm.value.id);
+          if (isCloudMode) {
+            isLoading.value = true;
+            if (isEditing.value) {
+              await supabase.from('events').update(eventData).eq('id', currentEventForm.value.id);
+            } else {
+              await supabase.from('events').insert([eventData]);
+            }
+            isLoading.value = false;
           } else {
-            await supabase.from('events').insert([eventData]);
+            if (isEditing.value) {
+              const idx = allEvents.value.findIndex(e => e.id === currentEventForm.value.id);
+              if (idx !== -1) allEvents.value[idx] = { ...allEvents.value[idx], ...eventData };
+            } else {
+              allEvents.value.push({ ...eventData, id: Date.now().toString(), created_at: new Date().toISOString() });
+            }
           }
-          
           showEventModal.value = false;
-          isLoading.value = false;
         };
 
         const deleteEvent = async () => {
           if (confirm('確定要刪除這個行程嗎？')) {
-            isLoading.value = true;
-            await supabase.from('events').delete().eq('id', currentEventForm.value.id);
+            if (isCloudMode) {
+              isLoading.value = true;
+              await supabase.from('events').delete().eq('id', currentEventForm.value.id);
+              isLoading.value = false;
+            } else {
+              allEvents.value = allEvents.value.filter(e => e.id !== currentEventForm.value.id);
+            }
             showEventModal.value = false;
-            isLoading.value = false;
           }
         };
 
-        // --- 記帳狀態 ---
         const newExpense = ref({ name: '', amount: null, payer: '彥廷', splitMode: 'equal', splitters: [], customAmounts: {} });
 
         const selectAllSplitters = () => {
@@ -309,12 +386,9 @@
           }
 
           let expenseRecord = { 
-            name: newExpense.value.name,
-            amount: Number(newExpense.value.amount),
-            payer: newExpense.value.payer,
-            splitMode: newExpense.value.splitMode,
-            splitters: newExpense.value.splitters,
-            customAmounts: newExpense.value.customAmounts 
+            name: newExpense.value.name, amount: Number(newExpense.value.amount),
+            payer: newExpense.value.payer, splitMode: newExpense.value.splitMode,
+            splitters: newExpense.value.splitters, customAmounts: newExpense.value.customAmounts 
           };
 
           if (expenseRecord.splitMode === 'unequal') {
@@ -325,17 +399,26 @@
             }
           }
 
-          isLoading.value = true;
-          await supabase.from('expenses').insert([expenseRecord]);
+          if (isCloudMode) {
+            isLoading.value = true;
+            await supabase.from('expenses').insert([expenseRecord]);
+            isLoading.value = false;
+          } else {
+            expenseRecord.id = Date.now().toString();
+            expenses.value.unshift(expenseRecord);
+          }
           newExpense.value = { name: '', amount: null, payer: '彥廷', splitMode: 'equal', splitters: [], customAmounts: {} };
-          isLoading.value = false;
         };
 
         const deleteExpense = async (id) => {
           if (confirm('確定要刪除這筆帳目嗎？')) {
-            isLoading.value = true;
-            await supabase.from('expenses').delete().eq('id', id);
-            isLoading.value = false;
+            if (isCloudMode) {
+              isLoading.value = true;
+              await supabase.from('expenses').delete().eq('id', id);
+              isLoading.value = false;
+            } else {
+              expenses.value = expenses.value.filter(e => e.id !== id);
+            }
           }
         };
 
@@ -354,31 +437,41 @@
           return b;
         });
 
-        // --- 初始化與即時同步 (Realtime) ---
         const fetchData = async () => {
+          if (!isCloudMode) return;
+          
+          isLoading.value = true;
           const [eventsRes, expensesRes] = await Promise.all([
             supabase.from('events').select('*'),
             supabase.from('expenses').select('*').order('created_at', { ascending: false })
           ]);
-          if (eventsRes.data) allEvents.value = eventsRes.data;
+          // 如果雲端資料庫已經有資料，就用雲端的；如果雲端是空的，可以先保留單機版預設資料讓畫面不空白
+          if (eventsRes.data && eventsRes.data.length > 0) {
+            allEvents.value = eventsRes.data;
+          } else if (eventsRes.data && eventsRes.data.length === 0 && allEvents.value.length > 0) {
+             // Optional: 如果希望一開始雲端沒資料時自動把單機資料塞進去，可以寫在這裡，但通常建議手動建。
+             // 這裡我們保留畫面預設資料。
+          }
           if (expensesRes.data) expenses.value = expensesRes.data;
+          
+          cloudConnected.value = true;
           isLoading.value = false;
         };
 
         onMounted(() => {
           fetchData();
-          
-          // 訂閱資料庫變更，達到真正的「即時共同編輯」
-          supabase.channel('public:all')
-            .on('postgres_changes', { event: '*', schema: 'public', table: 'events' }, fetchData)
-            .on('postgres_changes', { event: '*', schema: 'public', table: 'expenses' }, fetchData)
-            .subscribe();
+          if (isCloudMode) {
+            supabase.channel('public:all')
+              .on('postgres_changes', { event: '*', schema: 'public', table: 'events' }, fetchData)
+              .on('postgres_changes', { event: '*', schema: 'public', table: 'expenses' }, fetchData)
+              .subscribe();
+          }
         });
 
         return { 
           currentTab, members, baseDays, selectedDay, currentDayInfo, currentDayEvents,
           showEventModal, currentEventForm, isEditing, openAddModal, openEditModal, saveEvent, deleteEvent,
-          newExpense, addExpense, deleteExpense, balances, expenses, selectAllSplitters, isLoading 
+          newExpense, addExpense, deleteExpense, balances, expenses, selectAllSplitters, isLoading, isCloudMode, cloudConnected 
         };
       }
     }).mount('#app');
