@@ -20,7 +20,6 @@
     .hide-scrollbar::-webkit-scrollbar { display: none; }
     .modal-enter-active, .modal-leave-active { transition: opacity 0.3s ease; }
     .modal-enter-from, .modal-leave-to { opacity: 0; }
-    /* 防止 Vue 未載入時顯示大括號 */
     [v-cloak] { display: none; }
   </style>
 </head>
@@ -60,9 +59,12 @@
             <button @click="openAddModal" class="bg-pastel-green text-white w-8 h-8 rounded-full shadow hover:bg-green-400 transition-colors"><i class="fa-solid fa-plus"></i></button>
           </div>
           
-          <div v-if="currentDayEvents.length === 0" class="text-center text-gray-400 py-4 text-sm font-bold">
-            <p>這天還沒有行程喔！</p>
-            <p class="text-xs mt-1 text-gray-400 font-normal">點擊右上角的「+」開始新增吧</p>
+          <div v-if="currentDayEvents.length === 0" class="text-center text-gray-400 py-8 flex flex-col items-center">
+            <p class="font-bold text-lg mb-2">這天還沒有行程喔！</p>
+            <p class="text-sm mb-6">目前雲端資料庫是全新的空狀態。</p>
+            <button v-if="allEvents.length === 0" @click="injectDefaultEvents" class="px-5 py-3 bg-pastel-blue text-white rounded-full text-sm font-bold shadow-md hover:bg-blue-400 transition-colors animate-bounce">
+              <i class="fa-solid fa-cloud-arrow-up mr-2"></i> 一鍵匯入 14 天預設行程
+            </button>
           </div>
           
           <div v-for="event in currentDayEvents" :key="event.id" class="bg-white border-2 border-gray-100 p-4 rounded-2xl shadow-sm flex items-start space-x-4 relative">
@@ -93,7 +95,6 @@
             <h3 class="font-bold text-xl mb-4 text-pastel-blue border-b pb-2">
               <i class="fa-solid fa-calendar-plus mr-2"></i>{{ isEditing ? '編輯行程' : '新增行程' }}
             </h3>
-            
             <div class="space-y-3">
               <div><label class="text-xs font-bold text-gray-500">時間</label><input v-model="currentEventForm.time" type="text" class="w-full p-2 rounded-lg border border-gray-200 focus:ring-2 focus:ring-pastel-blue outline-none text-sm"></div>
               <div><label class="text-xs font-bold text-gray-500">行程名稱 <span class="text-red-400">*</span></label><input v-model="currentEventForm.name" type="text" class="w-full p-2 rounded-lg border border-gray-200 focus:ring-2 focus:ring-pastel-blue outline-none text-sm"></div>
@@ -102,7 +103,6 @@
               <div><label class="text-xs font-bold text-gray-500">專屬備註</label><textarea v-model="currentEventForm.note" class="w-full p-2 rounded-lg border border-gray-200 focus:ring-2 focus:ring-pastel-blue outline-none text-sm resize-none h-16"></textarea></div>
               <div><label class="text-xs font-bold text-gray-500">圖示代碼 (例如: fa-plane)</label><input v-model="currentEventForm.icon" type="text" class="w-full p-2 rounded-lg border border-gray-200 focus:ring-2 focus:ring-pastel-blue outline-none text-sm"></div>
             </div>
-
             <div class="mt-6 flex justify-end space-x-2">
               <button v-if="isEditing" @click="deleteEvent" class="px-4 py-2 bg-red-100 text-red-500 rounded-xl text-sm font-bold mr-auto hover:bg-red-200">刪除</button>
               <button @click="showEventModal = false" class="px-4 py-2 bg-gray-100 text-gray-600 rounded-xl text-sm font-bold hover:bg-gray-200">取消</button>
@@ -194,9 +194,6 @@
   </div>
 
   <script>
-    // ==========================================
-    // 🚀 請確保這兩行資料完全正確！
-    // ==========================================
     const SUPABASE_URL = 'https://bruaouuwminziimyoyww.supabase.co'; 
     const SUPABASE_ANON_KEY = 'sb_publishable_9dq_CJYFBiJSpKegZk0Uhg_h6Vrkq1t';
     
@@ -230,6 +227,102 @@
         const currentDayEvents = computed(() => {
           return allEvents.value.filter(e => e.date === selectedDay.value).sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
         });
+
+        // 預設行程陣列
+        const defaultEventsArray = [
+          { date: '04/01', time: '13:20 - 15:25', name: '桃園飛往香港', desc: 'TPE - HKG', gmap: 'https://www.google.com/maps/search/?api=1&query=桃園國際機場', note: '國泰航空 CX495\n第 1 航廈', icon: 'fa-plane-departure' },
+          { date: '04/01', time: '21:05 - 12:40(+1)', name: '香港飛往奧克蘭', desc: 'HKG - AKL', gmap: 'https://www.google.com/maps/search/?api=1&query=香港國際機場', note: '國泰航空 CX113\n第 1 航廈', icon: 'fa-plane' },
+          { date: '04/02', time: '12:40', name: '抵達奧克蘭', desc: '', gmap: 'https://www.google.com/maps/search/?api=1&query=奧克蘭機場', note: '', icon: 'fa-plane-arrival' },
+          { date: '04/02', time: '16:10 - 17:35', name: '國內線前往基督城', desc: 'AKL - CHC', gmap: 'https://www.google.com/maps/search/?api=1&query=基督城機場', note: '捷星航空 JQ237\n訂位代號: XLTMWS', icon: 'fa-plane-arrival' },
+          { date: '04/02', time: '晚上', name: '新攝政街', desc: 'New Regent Street Precinct', gmap: 'https://www.google.com/maps/search/?api=1&query=New+Regent+Street', note: '', icon: 'fa-moon' },
+          { date: '04/02', time: '住宿', name: 'City Sanctuary on Kilmore', desc: '基督城', gmap: 'https://www.google.com/maps/search/?api=1&query=City+Sanctuary+on+Kilmore', note: '', icon: 'fa-bed' },
+          { date: '04/02', time: '餐廳候補', name: 'Unknown Chapter Coffee Roasters', desc: '', gmap: 'https://www.google.com/maps/search/?api=1&query=Unknown+Chapter+Coffee+Roasters', note: '', icon: 'fa-mug-hot' },
+          { date: '04/02', time: '餐廳候補', name: 'Bohemian Bakery Cafe', desc: '', gmap: 'https://www.google.com/maps/search/?api=1&query=Bohemian+Bakery+Cafe', note: '', icon: 'fa-bread-slice' },
+          { date: '04/02', time: '餐廳候補', name: 'Amazonita', desc: '', gmap: 'https://www.google.com/maps/search/?api=1&query=Amazonita', note: '', icon: 'fa-utensils' },
+          { date: '04/03', time: '11:15', name: '賞鯨、海豚', desc: '', gmap: 'https://www.google.com/maps/search/?api=1&query=Whale+Watch+Kaikoura', note: '', icon: 'fa-anchor' },
+          { date: '04/03', time: '下午', name: 'Point Kean Viewpoint', desc: 'Kaikoura Seal Colony', gmap: 'https://www.google.com/maps/search/?api=1&query=Point+Kean+Viewpoint', note: '', icon: 'fa-camera' },
+          { date: '04/03', time: '下午', name: 'Kaikoura Seal Colony', desc: '', gmap: 'https://www.google.com/maps/search/?api=1&query=Kaikoura+Seal+Colony', note: '', icon: 'fa-camera' },
+          { date: '04/03', time: '晚餐', name: '吃海鮮', desc: '', gmap: '', note: '', icon: 'fa-fish' },
+          { date: '04/03', time: '住宿', name: 'City Sanctuary on Kilmore', desc: '基督城', gmap: 'https://www.google.com/maps/search/?api=1&query=City+Sanctuary+on+Kilmore', note: '', icon: 'fa-bed' },
+          { date: '04/04', time: '09:00 - 15:00', name: 'Fairlie Bakehouse', desc: '3hr drive', gmap: 'https://www.google.com/maps/search/?api=1&query=Fairlie+Bakehouse', note: '', icon: 'fa-car' },
+          { date: '04/04', time: '咖啡廳', name: 'Astro Cafe', desc: '', gmap: 'https://www.google.com/maps/search/?api=1&query=Astro+Cafe+Tekapo', note: '', icon: 'fa-mug-hot' },
+          { date: '04/04', time: '午餐', name: 'The Greedy Cow Cafe', desc: '', gmap: 'https://maps.app.goo.gl/tZsrBTkoJ1Qdj2zF9。4/5晚餐為飯店的buffet，跟餐廳候補Mint', note: '', icon: 'fa-burger' },
+          { date: '04/04', time: '下午', name: '好牧羊人教堂', desc: '', gmap: 'https://www.google.com/maps/search/?api=1&query=Church+of+the+Good+Shepherd', note: '', icon: 'fa-church' },
+          { date: '04/04', time: '點心', name: 'The Better Batter', desc: '炸魚薯條', gmap: 'https://www.google.com/maps/search/?api=1&query=The+Better+Batter+Tekapo', note: '', icon: 'fa-fish' },
+          { date: '04/04', time: '採買', name: 'Four Square Tekapo', desc: '當地超市', gmap: 'https://www.google.com/maps/search/?api=1&query=Four+Square+Tekapo', note: '', icon: 'fa-cart-shopping' },
+          { date: '04/04', time: '20:45 - 22:15', name: '觀星', desc: '', gmap: 'https://maps.app.goo.gl/gyKwgUjpWyeAZZt9A、The', note: '', icon: 'fa-star' },
+          { date: '04/04', time: '住宿', name: 'Fivestone Lodge', desc: '蒂卡波湖', gmap: 'https://www.google.com/maps/search/?api=1&query=Fivestone+Lodge', note: '', icon: 'fa-bed' },
+          { date: '04/05', time: '早上', name: '普卡基湖觀景點', desc: 'Lake Pukaki', gmap: 'https://www.google.com/maps/search/?api=1&query=Lake+Pukaki', note: '', icon: 'fa-mountain-sun' },
+          { date: '04/05', time: '景點', name: 'Peter\'s Lookout', desc: '', gmap: 'https://www.google.com/maps/search/?api=1&query=Peter%27s+Lookout', note: '', icon: 'fa-camera' },
+          { date: '04/05', time: '午餐', name: 'Alpine Salmon Shop', desc: '', gmap: 'https://www.google.com/maps/search/?api=1&query=Alpine+Salmon+Shop', note: '', icon: 'fa-fish' },
+          { date: '04/05', time: '13:30', name: 'Hooker Valley Track', desc: '健行或直升機', gmap: 'https://www.google.com/maps/search/?api=1&query=Hooker+Valley+Track', note: '', icon: 'fa-person-hiking' },
+          { date: '04/05', time: '18:00', name: 'Buffet 晚餐', desc: '', gmap: '', note: '', icon: 'fa-utensils' },
+          { date: '04/05', time: '餐廳候補', name: 'Mint Folk & Co', desc: '', gmap: 'https://maps.app.goo.gl/ZJVLMZ6Vgoh92SDn6', note: '', icon: 'fa-utensils' },
+          { date: '04/05', time: '15:00', name: 'Check in', desc: 'The Hermitage Hotel', gmap: 'https://www.google.com/maps/search/?api=1&query=The+Hermitage+Hotel+Mt+Cook', note: '', icon: 'fa-bed' },
+          { date: '04/06', time: '早上', name: '冰山健行或直升機', desc: '如果前一天被取消', gmap: '', note: '', icon: 'fa-person-hiking' },
+          { date: '04/06', time: '下午', name: '前往但尼丁', desc: '4hr drive', gmap: '', note: '', icon: 'fa-car' },
+          { date: '04/06', time: '晚上', name: '鮑德溫街', desc: '世界最陡街道', gmap: 'https://www.google.com/maps/search/?api=1&query=Baldwin+Street+Dunedin', note: '', icon: 'fa-road' },
+          { date: '04/06', time: '晚上', name: '但尼丁火車站', desc: '', gmap: 'https://www.google.com/maps/search/?api=1&query=Dunedin+Railway+Station', note: '', icon: 'fa-train' },
+          { date: '04/06', time: '晚上', name: '第一教堂', desc: '', gmap: 'https://www.google.com/maps/search/?api=1&query=First+Church+of+Otago', note: '', icon: 'fa-church' },
+          { date: '04/06', time: '住宿', name: '但尼丁 Dunedin', desc: '', gmap: '', note: '', icon: 'fa-bed' },
+          { date: '04/06', time: '餐廳候補', name: 'Etrusco at the Savoy', desc: '', gmap: 'https://www.google.com/maps/search/?api=1&query=Etrusco+at+the+Savoy', note: '', icon: 'fa-utensils' },
+          { date: '04/06', time: '餐廳候補', name: 'Emerson\'s Brewery', desc: '', gmap: 'https://www.google.com/maps/search/?api=1&query=Emerson%27s+Brewery', note: '', icon: 'fa-beer-mug-empty' },
+          { date: '04/07', time: '09:00–17:00', name: 'Tunnel Beach', desc: '隧道海灘步道', gmap: 'https://www.google.com/maps/search/?api=1&query=Tunnel+Beach', note: '', icon: 'fa-water' },
+          { date: '04/07', time: '12:00', name: 'Royal Albatross Centre', desc: '皇家信天翁中心', gmap: 'https://www.google.com/maps/search/?api=1&query=Royal+Albatross+Centre', note: '', icon: 'fa-crow' },
+          { date: '04/07', time: '14:30', name: 'Monarch Wildlife Cruises', desc: '生態遊船', gmap: 'https://www.google.com/maps/search/?api=1&query=Monarch+Wildlife+Cruises', note: '', icon: 'fa-ship' },
+          { date: '04/07', time: '晚上', name: '前往蒂阿瑙', desc: '4hr drive', gmap: '', note: '', icon: 'fa-car' },
+          { date: '04/07', time: '住宿', name: 'Luxury on Luxmore', desc: '蒂阿瑙', gmap: 'https://www.google.com/maps/search/?api=1&query=Luxury+on+Luxmore+Te+Anau', note: '', icon: 'fa-bed' },
+          { date: '04/08', time: '早上', name: '前往米爾福德峽灣', desc: '2hr drive', gmap: '', note: '', icon: 'fa-car' },
+          { date: '04/08', time: '11:15', name: 'Milford Sound Cruise', desc: '米爾福德峽灣遊船', gmap: 'https://www.google.com/maps/search/?api=1&query=Milford+Sound+Cruise+Terminal', note: '', icon: 'fa-ship' },
+          { date: '04/08', time: '下午', name: 'Mirror Lakes', desc: '鏡湖', gmap: 'https://www.google.com/maps/search/?api=1&query=Mirror+Lakes+New+Zealand', note: '', icon: 'fa-camera' },
+          { date: '04/08', time: '下午', name: 'Eglinton Valley', desc: '埃格林頓山谷', gmap: 'https://www.google.com/maps/search/?api=1&query=Eglinton+Valley', note: '', icon: 'fa-mountain' },
+          { date: '04/08', time: '17:45', name: 'Te Anau Glowworm Caves', desc: '螢火蟲洞', gmap: 'https://www.google.com/maps/search/?api=1&query=Te+Anau+Glowworm+Caves', note: '', icon: 'fa-bug' },
+          { date: '04/08', time: '住宿', name: 'Luxury on Luxmore', desc: '蒂阿瑙', gmap: 'https://www.google.com/maps/search/?api=1&query=Luxury+on+Luxmore+Te+Anau', note: '', icon: 'fa-bed' },
+          { date: '04/09', time: '12:00', name: 'NZONE Skydive', desc: '跳傘 (3hr)', gmap: 'https://www.google.com/maps/search/?api=1&query=NZONE+Skydive+Queenstown', note: '', icon: 'fa-parachute-box' },
+          { date: '04/09', time: '下午', name: '鹿園 Deer Park Heights', desc: '', gmap: 'https://www.google.com/maps/search/?api=1&query=Deer+Park+Heights', note: '', icon: 'fa-deer' },
+          { date: '04/09', time: '住宿', name: '皇后鎮', desc: '', gmap: '', note: '', icon: 'fa-bed' },
+          { date: '04/09', time: '餐廳候補', name: 'Amisfield Bistro', desc: '', gmap: 'https://www.google.com/maps/search/?api=1&query=Amisfield+Bistro', note: '', icon: 'fa-wine-glass' },
+          { date: '04/09', time: '餐廳候補', name: 'Anita gelato', desc: '', gmap: 'https://www.google.com/maps/search/?api=1&query=Anita+gelato', note: '', icon: 'fa-ice-cream' },
+          { date: '04/09', time: '餐廳候補', name: 'Fergburger', desc: '第一名漢堡', gmap: 'https://www.google.com/maps/search/?api=1&query=Fergburger', note: '', icon: 'fa-burger' },
+          { date: '04/09', time: '餐廳候補', name: 'Patagonia Chocolates', desc: '', gmap: 'https://www.google.com/maps/search/?api=1&query=Patagonia+Chocolates', note: '', icon: 'fa-cookie' },
+          { date: '04/10', time: '全日', name: 'Glenorchy Scenic Drive', desc: '絕美公路', gmap: '', note: '', icon: 'fa-car' },
+          { date: '04/10', time: '15:00', name: 'TSS Earnslaw 蒸汽船', desc: 'TSS 厄恩斯勞號', gmap: 'https://www.google.com/maps/search/?api=1&query=TSS+Earnslaw', note: '', icon: 'fa-ship' },
+          { date: '04/10', time: '景點', name: 'Skyline Queenstown', desc: '纜車與 Luge', gmap: 'https://www.google.com/maps/search/?api=1&query=Skyline+Queenstown', note: '', icon: 'fa-cable-car' },
+          { date: '04/10', time: '住宿', name: '皇后鎮', desc: '', gmap: '', note: '', icon: 'fa-bed' },
+          { date: '04/10', time: '餐廳候補', name: 'NEST 美景咖啡廳', desc: '', gmap: '', note: '', icon: 'fa-mug-hot' },
+          { date: '04/11', time: '早上', name: 'That Wanaka Tree', desc: '瓦納卡樹', gmap: 'https://www.google.com/maps/search/?api=1&query=That+Wanaka+Tree', note: '', icon: 'fa-tree' },
+          { date: '04/11', time: '早上', name: 'Roys Peak Track', desc: '健行步道', gmap: 'https://www.google.com/maps/search/?api=1&query=Roys+Peak+Track', note: '', icon: 'fa-person-hiking' },
+          { date: '04/11', time: '行程', name: 'Rippon Vineyard', desc: '', gmap: '', note: '', icon: 'fa-wine-glass' },
+          { date: '04/11', time: '下午', name: 'Crown Range Road Scenic Lookout', desc: '皇冠山脈景觀台', gmap: 'https://www.google.com/maps/search/?api=1&query=Crown+Range+Road+Scenic+Lookout', note: '', icon: 'fa-camera' },
+          { date: '04/11', time: '住宿', name: '皇后鎮', desc: '', gmap: '', note: '', icon: 'fa-bed' },
+          { date: '04/11', time: '餐廳候補', name: 'Francesca Arrowtown', desc: 'Bakery', gmap: 'https://www.google.com/maps/search/?api=1&query=Francesca+Arrowtown', note: '', icon: 'fa-pizza-slice' },
+          { date: '04/11', time: '餐廳候補', name: 'Arrowtown Bakery', desc: '', gmap: 'https://www.google.com/maps/search/?api=1&query=Arrowtown+Bakery', note: '', icon: 'fa-bread-slice' },
+          { date: '04/11', time: '餐廳候補', name: 'Wolf Coffee Roasters', desc: '', gmap: 'https://www.google.com/maps/search/?api=1&query=Wolf+Coffee+Roasters', note: '', icon: 'fa-mug-hot' },
+          { date: '04/12', time: '早上', name: '箭鎮 (Arrowtown)', desc: '', gmap: 'https://www.google.com/maps/search/?api=1&query=Arrowtown', note: '', icon: 'fa-house' },
+          { date: '04/12', time: '早上', name: '格林諾奇 (Glenorchy)', desc: '', gmap: 'https://www.google.com/maps/search/?api=1&query=Glenorchy', note: '', icon: 'fa-tree' },
+          { date: '04/12', time: '行程', name: 'Glenorchy Wharf', desc: '快艇', gmap: '', note: '', icon: 'fa-water' },
+          { date: '04/12', time: '17:30 - 19:20', name: '飛往奧克蘭', desc: 'ZQN - AKL', gmap: '', note: '捷星航空 JQ298\n訂位代號: PSGD9X', icon: 'fa-plane' },
+          { date: '04/12', time: '住宿', name: 'ibis budget Auckland Airport', desc: '奧克蘭', gmap: 'https://www.google.com/maps/search/?api=1&query=ibis+budget+Auckland+Airport', note: '', icon: 'fa-bed' },
+          { date: '04/13', time: '13:25 - 21:05', name: '奧克蘭飛往香港', desc: 'AKL - HKG', gmap: '', note: '國泰航空 CX198\nI 航廈', icon: 'fa-plane-departure' },
+          { date: '04/13', time: '22:50 - 00:35(+1)', name: '香港飛往台灣', desc: 'HKG - TPE', gmap: '', note: '國泰航空 CX408\n第 1 航廈', icon: 'fa-plane' },
+          { date: '04/14', time: '00:35', name: '抵達台灣', desc: '結束美好旅程', gmap: '', note: '', icon: 'fa-house-chimney' }
+        ];
+
+        const injectDefaultEvents = async () => {
+          if (!confirm('這將會把 14 天的完整行程匯入到雲端資料庫中，確定要執行嗎？')) return;
+          isLoading.value = true;
+          try {
+            const { error } = await supabase.from('events').insert(defaultEventsArray);
+            if (error) throw error;
+            alert('匯入成功！請重新整理網頁。');
+            window.location.reload();
+          } catch (error) {
+            console.error('Inject error:', error);
+            alert('匯入失敗：' + error.message);
+          } finally {
+            isLoading.value = false;
+          }
+        };
 
         const showEventModal = ref(false);
         const isEditing = ref(false);
@@ -399,8 +492,8 @@
         });
 
         return { 
-          currentTab, members, baseDays, selectedDay, currentDayInfo, currentDayEvents,
-          showEventModal, currentEventForm, isEditing, openAddModal, openEditModal, saveEvent, deleteEvent,
+          currentTab, members, baseDays, selectedDay, currentDayInfo, currentDayEvents, allEvents,
+          showEventModal, currentEventForm, isEditing, openAddModal, openEditModal, saveEvent, deleteEvent, injectDefaultEvents,
           newExpense, addExpense, deleteExpense, balances, expenses, selectAllSplitters, isLoading, connectionError
         };
       }
