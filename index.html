@@ -22,7 +22,6 @@
     .modal-enter-active, .modal-leave-active { transition: opacity 0.3s ease; }
     .modal-enter-from, .modal-leave-to { opacity: 0; }
     [v-cloak] { display: none; }
-    /* 拖曳時的視覺效果 */
     .sortable-ghost { opacity: 0.4; background-color: #f9fafb; border: 2px dashed #A7C7E7; }
   </style>
 </head>
@@ -103,15 +102,17 @@
             </div>
           </div>
 
-          <div v-show="isReordering" ref="reorderList" class="space-y-3 pb-6">
-            <div v-for="event in tempEvents" :key="event.id" :data-id="event.id" class="bg-white border-2 border-gray-200 p-3 rounded-xl shadow-sm flex items-center space-x-3 cursor-move">
-              <div class="drag-handle text-gray-400 text-xl px-2 py-1"><i class="fa-solid fa-grip-lines"></i></div>
-              <div class="bg-pastel-yellow text-gray-700 w-10 h-10 rounded-full flex items-center justify-center text-lg shadow-inner flex-shrink-0">
-                <i class="fa-solid" :class="event.icon || 'fa-star'"></i>
-              </div>
-              <div class="flex-1">
-                <p class="text-xs font-bold text-gray-400">{{ event.time }}</p>
-                <p class="font-bold text-base text-gray-700 leading-tight">{{ event.name }}</p>
+          <div v-show="isReordering" class="pb-6">
+            <div ref="reorderList" class="space-y-3 pb-2">
+              <div v-for="event in tempEvents" :key="event.id" :data-id="event.id" class="bg-white border-2 border-gray-200 p-3 rounded-xl shadow-sm flex items-center space-x-3 cursor-move">
+                <div class="drag-handle text-gray-400 text-xl px-2 py-1"><i class="fa-solid fa-grip-lines"></i></div>
+                <div class="bg-pastel-yellow text-gray-700 w-10 h-10 rounded-full flex items-center justify-center text-lg shadow-inner flex-shrink-0">
+                  <i class="fa-solid" :class="event.icon || 'fa-star'"></i>
+                </div>
+                <div class="flex-1">
+                  <p class="text-xs font-bold text-gray-400">{{ event.time }}</p>
+                  <p class="font-bold text-base text-gray-700 leading-tight">{{ event.name }}</p>
+                </div>
               </div>
             </div>
             <div class="text-center text-xs text-pastel-blue font-bold mt-4 animate-pulse">
@@ -227,7 +228,6 @@
   </div>
 
   <script>
-    // 你的專屬 Supabase 連線資訊
     const SUPABASE_URL = 'https://bruaouuwminziimyoyww.supabase.co'; 
     const SUPABASE_ANON_KEY = 'sb_publishable_9dq_CJYFBiJSpKegZk0Uhg_h6Vrkq1t';
     
@@ -258,39 +258,34 @@
         const allEvents = ref([]);
         const expenses = ref([]);
 
-        // 依靠 created_at 來確保排序
+        // 取出這天的行程，並依照 created_at 排序
         const currentDayEvents = computed(() => {
           return allEvents.value.filter(e => e.date === selectedDay.value).sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
         });
 
-        // 拖曳排序相關變數
+        // --- 拖曳排序機制 ---
         const isReordering = ref(false);
         const tempEvents = ref([]);
         const reorderList = ref(null);
         let sortableInstance = null;
 
         const changeDay = (date) => {
-          if (isReordering.value) return; // 排序中不允許切換天數
+          if (isReordering.value) return; 
           selectedDay.value = date;
         };
 
         const startReorder = () => {
           isReordering.value = true;
-          // 複製一份當天行程出來供拖曳使用
+          // 深拷貝一份供拖曳顯示用
           tempEvents.value = JSON.parse(JSON.stringify(currentDayEvents.value));
           
-          // 等待 DOM 更新後綁定 SortableJS
           nextTick(() => {
             if (reorderList.value) {
               sortableInstance = new Sortable(reorderList.value, {
                 animation: 150,
-                handle: '.drag-handle', // 指定拖曳把手
+                handle: '.drag-handle',
                 ghostClass: 'sortable-ghost',
-                onEnd: function (evt) {
-                  // 更新我們暫存的陣列順序
-                  const itemEl = tempEvents.value.splice(evt.oldIndex, 1)[0];
-                  tempEvents.value.splice(evt.newIndex, 0, itemEl);
-                },
+                // 不去操作陣列，全靠 DOM 取得最終結果
               });
             }
           });
@@ -308,21 +303,25 @@
         const saveReorder = async () => {
           isLoading.value = true;
           try {
-            // 擷取原本資料庫裡這天的「正確順序的時間戳記」
-            const originalTimestamps = currentDayEvents.value.map(e => e.created_at);
-            
-            // 將這些舊的時間戳記，依照使用者「新排好的順序」重新賦予給事件
-            // 這樣 Supabase 只要依舊照著時間排序，就會是使用者想要的順序了
-            const updates = tempEvents.value.map((ev, index) => {
-              return supabase.from('events').update({ created_at: originalTimestamps[index] }).eq('id', ev.id);
+            // 直接從畫面上抓取被拖曳後的真實 ID 順序
+            const orderedIds = Array.from(reorderList.value.children)
+                                    .map(el => el.getAttribute('data-id'))
+                                    .filter(id => id);
+
+            // 給予這些 ID 全新且嚴格遞增的時間戳記 (每個間隔 1 秒)
+            // 這樣寫入資料庫後，不管原本時間長怎樣，都能強制保證順序
+            const baseTime = new Date().getTime();
+            const updates = orderedIds.map((id, index) => {
+              const newTime = new Date(baseTime + index * 1000).toISOString();
+              return supabase.from('events').update({ created_at: newTime }).eq('id', id);
             });
 
-            // 批次執行更新
             await Promise.all(updates);
-            
+
             isReordering.value = false;
             if (sortableInstance) sortableInstance.destroy();
             await fetchData(); // 重新抓取資料確保畫面同步
+            
           } catch (error) {
             console.error('Reorder error:', error);
             alert('排序儲存失敗：' + error.message);
@@ -330,6 +329,8 @@
             isLoading.value = false;
           }
         };
+
+        // --- 以下為一般 CRUD 與預設資料功能 ---
 
         const defaultEventsArray = [
           { date: '04/01', time: '13:20 - 15:25', name: '桃園飛往香港', desc: 'TPE - HKG', gmap: 'https://www.google.com/maps/search/?api=1&query=桃園國際機場', note: '國泰航空 CX495\n第 1 航廈', icon: 'fa-plane-departure' },
