@@ -67,11 +67,11 @@
             </button>
           </div>
           
-          <div v-for="event in currentDayEvents" :key="event.id" class="bg-white border-2 border-gray-100 p-4 rounded-2xl shadow-sm flex items-start space-x-4 relative">
+          <div v-for="(event, index) in currentDayEvents" :key="event.id" class="bg-white border-2 border-gray-100 p-4 rounded-2xl shadow-sm flex items-start space-x-4 relative">
             <div class="bg-pastel-yellow text-gray-700 w-12 h-12 rounded-full flex items-center justify-center text-xl shadow-inner flex-shrink-0 mt-1">
               <i class="fa-solid" :class="event.icon || 'fa-star'"></i>
             </div>
-            <div class="flex-1 pr-6">
+            <div class="flex-1 pr-10">
               <p class="text-sm font-bold text-gray-500">{{ event.time }}</p>
               <p class="font-bold text-lg leading-tight">{{ event.name }}</p>
               <p class="text-sm text-gray-400 mt-1">{{ event.desc }}</p>
@@ -84,7 +84,18 @@
                 <i class="fa-solid fa-location-dot text-red-400 mr-1"></i> Google Map 導航
               </a>
             </div>
-            <button @click="openEditModal(event)" class="absolute top-4 right-4 text-gray-300 hover:text-pastel-blue p-1"><i class="fa-solid fa-pen"></i></button>
+            
+            <div class="absolute top-4 right-3 flex flex-col items-center space-y-3">
+              <button v-if="index > 0" @click="moveUp(index)" class="text-gray-300 hover:text-pastel-blue" title="向上移動">
+                <i class="fa-solid fa-arrow-up"></i>
+              </button>
+              <button @click="openEditModal(event)" class="text-gray-300 hover:text-pastel-pink" title="編輯行程">
+                <i class="fa-solid fa-pen"></i>
+              </button>
+              <button v-if="index < currentDayEvents.length - 1" @click="moveDown(index)" class="text-gray-300 hover:text-pastel-blue" title="向下移動">
+                <i class="fa-solid fa-arrow-down"></i>
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -194,6 +205,7 @@
   </div>
 
   <script>
+    // 你的專屬 Supabase 連線資訊
     const SUPABASE_URL = 'https://bruaouuwminziimyoyww.supabase.co'; 
     const SUPABASE_ANON_KEY = 'sb_publishable_9dq_CJYFBiJSpKegZk0Uhg_h6Vrkq1t';
     
@@ -224,11 +236,11 @@
         const allEvents = ref([]);
         const expenses = ref([]);
 
+        // 依靠 created_at 來確保排序
         const currentDayEvents = computed(() => {
           return allEvents.value.filter(e => e.date === selectedDay.value).sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
         });
 
-        // 預設行程陣列
         const defaultEventsArray = [
           { date: '04/01', time: '13:20 - 15:25', name: '桃園飛往香港', desc: 'TPE - HKG', gmap: 'https://www.google.com/maps/search/?api=1&query=桃園國際機場', note: '國泰航空 CX495\n第 1 航廈', icon: 'fa-plane-departure' },
           { date: '04/01', time: '21:05 - 12:40(+1)', name: '香港飛往奧克蘭', desc: 'HKG - AKL', gmap: 'https://www.google.com/maps/search/?api=1&query=香港國際機場', note: '國泰航空 CX113\n第 1 航廈', icon: 'fa-plane' },
@@ -312,10 +324,16 @@
           if (!confirm('這將會把 14 天的完整行程匯入到雲端資料庫中，確定要執行嗎？')) return;
           isLoading.value = true;
           try {
-            const { error } = await supabase.from('events').insert(defaultEventsArray);
+            // 為了確保預設行程在匯入時的排序正確，我們在寫入前手動加上一點時間差
+            const eventsWithTime = defaultEventsArray.map((ev, i) => {
+              const dateObj = new Date();
+              dateObj.setSeconds(dateObj.getSeconds() + i);
+              return { ...ev, created_at: dateObj.toISOString() };
+            });
+            const { error } = await supabase.from('events').insert(eventsWithTime);
             if (error) throw error;
-            alert('匯入成功！請重新整理網頁。');
-            window.location.reload();
+            alert('匯入成功！');
+            await fetchData();
           } catch (error) {
             console.error('Inject error:', error);
             alert('匯入失敗：' + error.message);
@@ -380,6 +398,65 @@
             } finally {
               isLoading.value = false;
             }
+          }
+        };
+
+        // --- 調動順序的核心邏輯 (互換 created_at 時間戳記) ---
+        const moveUp = async (index) => {
+          if (index === 0) return;
+          const current = currentDayEvents.value[index];
+          const prev = currentDayEvents.value[index - 1];
+
+          // 互換時間戳記
+          const temp = current.created_at;
+          current.created_at = prev.created_at;
+          prev.created_at = temp;
+
+          // 為了畫面順暢，先在本地更新排序
+          const idxCurrent = allEvents.value.findIndex(e => e.id === current.id);
+          const idxPrev = allEvents.value.findIndex(e => e.id === prev.id);
+          if (idxCurrent > -1) allEvents.value[idxCurrent].created_at = current.created_at;
+          if (idxPrev > -1) allEvents.value[idxPrev].created_at = prev.created_at;
+
+          isLoading.value = true;
+          try {
+            await Promise.all([
+              supabase.from('events').update({ created_at: current.created_at }).eq('id', current.id),
+              supabase.from('events').update({ created_at: prev.created_at }).eq('id', prev.id)
+            ]);
+          } catch (error) {
+            console.error('Move Up error:', error);
+          } finally {
+            isLoading.value = false;
+          }
+        };
+
+        const moveDown = async (index) => {
+          if (index === currentDayEvents.value.length - 1) return;
+          const current = currentDayEvents.value[index];
+          const next = currentDayEvents.value[index + 1];
+
+          // 互換時間戳記
+          const temp = current.created_at;
+          current.created_at = next.created_at;
+          next.created_at = temp;
+
+          // 為了畫面順暢，先在本地更新排序
+          const idxCurrent = allEvents.value.findIndex(e => e.id === current.id);
+          const idxNext = allEvents.value.findIndex(e => e.id === next.id);
+          if (idxCurrent > -1) allEvents.value[idxCurrent].created_at = current.created_at;
+          if (idxNext > -1) allEvents.value[idxNext].created_at = next.created_at;
+
+          isLoading.value = true;
+          try {
+            await Promise.all([
+              supabase.from('events').update({ created_at: current.created_at }).eq('id', current.id),
+              supabase.from('events').update({ created_at: next.created_at }).eq('id', next.id)
+            ]);
+          } catch (error) {
+            console.error('Move Down error:', error);
+          } finally {
+            isLoading.value = false;
           }
         };
 
@@ -471,7 +548,7 @@
             if (expensesRes.data) expenses.value = expensesRes.data;
           } catch (error) {
             console.error('Fetch error:', error);
-            connectionError.value = error.message || '連線失敗，請檢查資料表是否建立正確';
+            connectionError.value = error.message || '連線失敗，請檢查資料庫設定';
           } finally {
             isLoading.value = false;
           }
@@ -480,7 +557,6 @@
         onMounted(() => {
           fetchData();
           
-          // 訂閱資料庫變更
           try {
             supabase.channel('public:all')
               .on('postgres_changes', { event: '*', schema: 'public', table: 'events' }, fetchData)
@@ -494,6 +570,7 @@
         return { 
           currentTab, members, baseDays, selectedDay, currentDayInfo, currentDayEvents, allEvents,
           showEventModal, currentEventForm, isEditing, openAddModal, openEditModal, saveEvent, deleteEvent, injectDefaultEvents,
+          moveUp, moveDown, // 新增的上下移動方法
           newExpense, addExpense, deleteExpense, balances, expenses, selectAllSplitters, isLoading, connectionError
         };
       }
