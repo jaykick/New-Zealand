@@ -7,6 +7,7 @@
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://unpkg.com/vue@3.3.4/dist/vue.global.prod.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.38.4/dist/umd/supabase.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
   <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   <script>
@@ -21,6 +22,8 @@
     .modal-enter-active, .modal-leave-active { transition: opacity 0.3s ease; }
     .modal-enter-from, .modal-leave-to { opacity: 0; }
     [v-cloak] { display: none; }
+    /* 拖曳時的視覺效果 */
+    .sortable-ghost { opacity: 0.4; background-color: #f9fafb; border: 2px dashed #A7C7E7; }
   </style>
 </head>
 <body class="text-gray-700">
@@ -47,8 +50,9 @@
         
         <div class="flex overflow-x-auto space-x-3 pb-3 hide-scrollbar">
           <button v-for="day in baseDays" :key="day.date" 
-                  @click="selectedDay = day.date"
-                  :class="['flex-shrink-0 px-4 py-2 rounded-2xl font-bold transition-colors', selectedDay === day.date ? 'bg-pastel-pink text-white shadow-md' : 'bg-gray-100 text-gray-500']">
+                  @click="changeDay(day.date)"
+                  :class="['flex-shrink-0 px-4 py-2 rounded-2xl font-bold transition-colors', selectedDay === day.date ? 'bg-pastel-pink text-white shadow-md' : 'bg-gray-100 text-gray-500', isReordering ? 'opacity-50 cursor-not-allowed' : '']"
+                  :disabled="isReordering">
             {{ day.title }}<br><span class="text-xs">{{ day.date }}</span>
           </button>
         </div>
@@ -56,47 +60,65 @@
         <div v-if="currentDayInfo" class="mt-4 space-y-4">
           <div class="flex items-center justify-between">
             <h3 class="font-bold text-lg border-b-2 border-pastel-pink pb-1">{{ currentDayInfo.cities }}</h3>
-            <button @click="openAddModal" class="bg-pastel-green text-white w-8 h-8 rounded-full shadow hover:bg-green-400 transition-colors"><i class="fa-solid fa-plus"></i></button>
+            
+            <div v-if="!isReordering" class="flex space-x-2">
+              <button v-if="currentDayEvents.length > 1" @click="startReorder" class="bg-gray-100 text-gray-600 px-3 py-1.5 rounded-full shadow-sm text-sm font-bold hover:bg-pastel-blue hover:text-white transition-colors">
+                <i class="fa-solid fa-sort mr-1"></i>調整順序
+              </button>
+              <button @click="openAddModal" class="bg-pastel-green text-white w-8 h-8 rounded-full shadow hover:bg-green-400 transition-colors"><i class="fa-solid fa-plus"></i></button>
+            </div>
+            
+            <div v-else class="flex space-x-2">
+              <button @click="cancelReorder" class="bg-gray-200 text-gray-600 px-3 py-1.5 rounded-full text-sm font-bold shadow-sm">取消</button>
+              <button @click="saveReorder" class="bg-pastel-pink text-white px-3 py-1.5 rounded-full text-sm font-bold shadow hover:bg-pink-400">
+                <i class="fa-solid fa-check mr-1"></i>確定此行程順序
+              </button>
+            </div>
           </div>
           
           <div v-if="currentDayEvents.length === 0" class="text-center text-gray-400 py-8 flex flex-col items-center">
             <p class="font-bold text-lg mb-2">這天還沒有行程喔！</p>
-            <p class="text-sm mb-6">目前雲端資料庫是全新的空狀態。</p>
-            <button v-if="allEvents.length === 0" @click="injectDefaultEvents" class="px-5 py-3 bg-pastel-blue text-white rounded-full text-sm font-bold shadow-md hover:bg-blue-400 transition-colors animate-bounce">
+            <button v-if="allEvents.length === 0" @click="injectDefaultEvents" class="mt-4 px-5 py-3 bg-pastel-blue text-white rounded-full text-sm font-bold shadow-md hover:bg-blue-400 animate-bounce">
               <i class="fa-solid fa-cloud-arrow-up mr-2"></i> 一鍵匯入 14 天預設行程
             </button>
           </div>
           
-          <div v-for="(event, index) in currentDayEvents" :key="event.id" class="bg-white border-2 border-gray-100 p-4 rounded-2xl shadow-sm flex items-start space-x-4 relative">
-            <div class="bg-pastel-yellow text-gray-700 w-12 h-12 rounded-full flex items-center justify-center text-xl shadow-inner flex-shrink-0 mt-1">
-              <i class="fa-solid" :class="event.icon || 'fa-star'"></i>
-            </div>
-            <div class="flex-1 pr-10">
-              <p class="text-sm font-bold text-gray-500">{{ event.time }}</p>
-              <p class="font-bold text-lg leading-tight">{{ event.name }}</p>
-              <p class="text-sm text-gray-400 mt-1">{{ event.desc }}</p>
-              
-              <div v-if="event.note" class="mt-2 p-2 bg-blue-50 text-blue-800 text-xs rounded-lg border border-blue-100 whitespace-pre-line">
-                <i class="fa-solid fa-thumbtack mr-1"></i> {{ event.note }}
+          <div v-if="!isReordering">
+            <div v-for="event in currentDayEvents" :key="event.id" class="bg-white border-2 border-gray-100 p-4 rounded-2xl shadow-sm flex items-start space-x-4 relative mb-4">
+              <div class="bg-pastel-yellow text-gray-700 w-12 h-12 rounded-full flex items-center justify-center text-xl shadow-inner flex-shrink-0 mt-1">
+                <i class="fa-solid" :class="event.icon || 'fa-star'"></i>
               </div>
-              
-              <a v-if="event.gmap" :href="event.gmap" target="_blank" class="inline-block mt-3 px-3 py-1 bg-gray-100 text-gray-600 rounded-full text-xs font-bold hover:bg-pastel-yellow hover:text-gray-800 transition-colors">
-                <i class="fa-solid fa-location-dot text-red-400 mr-1"></i> Google Map 導航
-              </a>
-            </div>
-            
-            <div class="absolute top-4 right-3 flex flex-col items-center space-y-3">
-              <button v-if="index > 0" @click="moveUp(index)" class="text-gray-300 hover:text-pastel-blue" title="向上移動">
-                <i class="fa-solid fa-arrow-up"></i>
-              </button>
-              <button @click="openEditModal(event)" class="text-gray-300 hover:text-pastel-pink" title="編輯行程">
-                <i class="fa-solid fa-pen"></i>
-              </button>
-              <button v-if="index < currentDayEvents.length - 1" @click="moveDown(index)" class="text-gray-300 hover:text-pastel-blue" title="向下移動">
-                <i class="fa-solid fa-arrow-down"></i>
-              </button>
+              <div class="flex-1 pr-6">
+                <p class="text-sm font-bold text-gray-500">{{ event.time }}</p>
+                <p class="font-bold text-lg leading-tight">{{ event.name }}</p>
+                <p class="text-sm text-gray-400 mt-1">{{ event.desc }}</p>
+                <div v-if="event.note" class="mt-2 p-2 bg-blue-50 text-blue-800 text-xs rounded-lg border border-blue-100 whitespace-pre-line">
+                  <i class="fa-solid fa-thumbtack mr-1"></i> {{ event.note }}
+                </div>
+                <a v-if="event.gmap" :href="event.gmap" target="_blank" class="inline-block mt-3 px-3 py-1 bg-gray-100 text-gray-600 rounded-full text-xs font-bold hover:bg-pastel-yellow hover:text-gray-800">
+                  <i class="fa-solid fa-location-dot text-red-400 mr-1"></i> Google Map 導航
+                </a>
+              </div>
+              <button @click="openEditModal(event)" class="absolute top-4 right-4 text-gray-300 hover:text-pastel-blue p-1"><i class="fa-solid fa-pen"></i></button>
             </div>
           </div>
+
+          <div v-show="isReordering" ref="reorderList" class="space-y-3 pb-6">
+            <div v-for="event in tempEvents" :key="event.id" :data-id="event.id" class="bg-white border-2 border-gray-200 p-3 rounded-xl shadow-sm flex items-center space-x-3 cursor-move">
+              <div class="drag-handle text-gray-400 text-xl px-2 py-1"><i class="fa-solid fa-grip-lines"></i></div>
+              <div class="bg-pastel-yellow text-gray-700 w-10 h-10 rounded-full flex items-center justify-center text-lg shadow-inner flex-shrink-0">
+                <i class="fa-solid" :class="event.icon || 'fa-star'"></i>
+              </div>
+              <div class="flex-1">
+                <p class="text-xs font-bold text-gray-400">{{ event.time }}</p>
+                <p class="font-bold text-base text-gray-700 leading-tight">{{ event.name }}</p>
+              </div>
+            </div>
+            <div class="text-center text-xs text-pastel-blue font-bold mt-4 animate-pulse">
+              💡 按住左側的「三條線」上下滑動來調整順序
+            </div>
+          </div>
+          
         </div>
       </div>
 
@@ -194,11 +216,11 @@
       </div>
     </main>
 
-    <nav class="fixed bottom-0 w-full max-w-[480px] bg-white border-t border-gray-100 grid grid-cols-2 p-3 pb-6 shadow-[0_-5px_15px_rgba(0,0,0,0.05)] rounded-t-3xl">
-      <button @click="currentTab = 'itinerary'" :class="['flex flex-col items-center justify-center p-2', currentTab === 'itinerary' ? 'text-pastel-blue font-bold' : 'text-gray-400']">
+    <nav class="fixed bottom-0 w-full max-w-[480px] bg-white border-t border-gray-100 grid grid-cols-2 p-3 pb-6 shadow-[0_-5px_15px_rgba(0,0,0,0.05)] rounded-t-3xl z-20">
+      <button @click="currentTab = 'itinerary'" :class="['flex flex-col items-center justify-center p-2', currentTab === 'itinerary' ? 'text-pastel-blue font-bold' : 'text-gray-400']" :disabled="isReordering">
         <i class="fa-solid fa-calendar-days text-xl mb-1"></i><span class="text-xs">行程</span>
       </button>
-      <button @click="currentTab = 'accounting'" :class="['flex flex-col items-center justify-center p-2', currentTab === 'accounting' ? 'text-pastel-pink font-bold' : 'text-gray-400']">
+      <button @click="currentTab = 'accounting'" :class="['flex flex-col items-center justify-center p-2', currentTab === 'accounting' ? 'text-pastel-pink font-bold' : 'text-gray-400']" :disabled="isReordering">
         <i class="fa-solid fa-wallet text-xl mb-1"></i><span class="text-xs">記帳</span>
       </button>
     </nav>
@@ -209,7 +231,7 @@
     const SUPABASE_URL = 'https://bruaouuwminziimyoyww.supabase.co'; 
     const SUPABASE_ANON_KEY = 'sb_publishable_9dq_CJYFBiJSpKegZk0Uhg_h6Vrkq1t';
     
-    const { createApp, ref, computed, onMounted } = Vue;
+    const { createApp, ref, computed, onMounted, nextTick } = Vue;
 
     createApp({
       setup() {
@@ -240,6 +262,74 @@
         const currentDayEvents = computed(() => {
           return allEvents.value.filter(e => e.date === selectedDay.value).sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
         });
+
+        // 拖曳排序相關變數
+        const isReordering = ref(false);
+        const tempEvents = ref([]);
+        const reorderList = ref(null);
+        let sortableInstance = null;
+
+        const changeDay = (date) => {
+          if (isReordering.value) return; // 排序中不允許切換天數
+          selectedDay.value = date;
+        };
+
+        const startReorder = () => {
+          isReordering.value = true;
+          // 複製一份當天行程出來供拖曳使用
+          tempEvents.value = JSON.parse(JSON.stringify(currentDayEvents.value));
+          
+          // 等待 DOM 更新後綁定 SortableJS
+          nextTick(() => {
+            if (reorderList.value) {
+              sortableInstance = new Sortable(reorderList.value, {
+                animation: 150,
+                handle: '.drag-handle', // 指定拖曳把手
+                ghostClass: 'sortable-ghost',
+                onEnd: function (evt) {
+                  // 更新我們暫存的陣列順序
+                  const itemEl = tempEvents.value.splice(evt.oldIndex, 1)[0];
+                  tempEvents.value.splice(evt.newIndex, 0, itemEl);
+                },
+              });
+            }
+          });
+        };
+
+        const cancelReorder = () => {
+          isReordering.value = false;
+          tempEvents.value = [];
+          if (sortableInstance) {
+            sortableInstance.destroy();
+            sortableInstance = null;
+          }
+        };
+
+        const saveReorder = async () => {
+          isLoading.value = true;
+          try {
+            // 擷取原本資料庫裡這天的「正確順序的時間戳記」
+            const originalTimestamps = currentDayEvents.value.map(e => e.created_at);
+            
+            // 將這些舊的時間戳記，依照使用者「新排好的順序」重新賦予給事件
+            // 這樣 Supabase 只要依舊照著時間排序，就會是使用者想要的順序了
+            const updates = tempEvents.value.map((ev, index) => {
+              return supabase.from('events').update({ created_at: originalTimestamps[index] }).eq('id', ev.id);
+            });
+
+            // 批次執行更新
+            await Promise.all(updates);
+            
+            isReordering.value = false;
+            if (sortableInstance) sortableInstance.destroy();
+            await fetchData(); // 重新抓取資料確保畫面同步
+          } catch (error) {
+            console.error('Reorder error:', error);
+            alert('排序儲存失敗：' + error.message);
+          } finally {
+            isLoading.value = false;
+          }
+        };
 
         const defaultEventsArray = [
           { date: '04/01', time: '13:20 - 15:25', name: '桃園飛往香港', desc: 'TPE - HKG', gmap: 'https://www.google.com/maps/search/?api=1&query=桃園國際機場', note: '國泰航空 CX495\n第 1 航廈', icon: 'fa-plane-departure' },
@@ -321,10 +411,9 @@
         ];
 
         const injectDefaultEvents = async () => {
-          if (!confirm('這將會把 14 天的完整行程匯入到雲端資料庫中，確定要執行嗎？')) return;
+          if (!confirm('這將會把 14 天的預設行程匯入到雲端，確定要執行嗎？')) return;
           isLoading.value = true;
           try {
-            // 為了確保預設行程在匯入時的排序正確，我們在寫入前手動加上一點時間差
             const eventsWithTime = defaultEventsArray.map((ev, i) => {
               const dateObj = new Date();
               dateObj.setSeconds(dateObj.getSeconds() + i);
@@ -398,65 +487,6 @@
             } finally {
               isLoading.value = false;
             }
-          }
-        };
-
-        // --- 調動順序的核心邏輯 (互換 created_at 時間戳記) ---
-        const moveUp = async (index) => {
-          if (index === 0) return;
-          const current = currentDayEvents.value[index];
-          const prev = currentDayEvents.value[index - 1];
-
-          // 互換時間戳記
-          const temp = current.created_at;
-          current.created_at = prev.created_at;
-          prev.created_at = temp;
-
-          // 為了畫面順暢，先在本地更新排序
-          const idxCurrent = allEvents.value.findIndex(e => e.id === current.id);
-          const idxPrev = allEvents.value.findIndex(e => e.id === prev.id);
-          if (idxCurrent > -1) allEvents.value[idxCurrent].created_at = current.created_at;
-          if (idxPrev > -1) allEvents.value[idxPrev].created_at = prev.created_at;
-
-          isLoading.value = true;
-          try {
-            await Promise.all([
-              supabase.from('events').update({ created_at: current.created_at }).eq('id', current.id),
-              supabase.from('events').update({ created_at: prev.created_at }).eq('id', prev.id)
-            ]);
-          } catch (error) {
-            console.error('Move Up error:', error);
-          } finally {
-            isLoading.value = false;
-          }
-        };
-
-        const moveDown = async (index) => {
-          if (index === currentDayEvents.value.length - 1) return;
-          const current = currentDayEvents.value[index];
-          const next = currentDayEvents.value[index + 1];
-
-          // 互換時間戳記
-          const temp = current.created_at;
-          current.created_at = next.created_at;
-          next.created_at = temp;
-
-          // 為了畫面順暢，先在本地更新排序
-          const idxCurrent = allEvents.value.findIndex(e => e.id === current.id);
-          const idxNext = allEvents.value.findIndex(e => e.id === next.id);
-          if (idxCurrent > -1) allEvents.value[idxCurrent].created_at = current.created_at;
-          if (idxNext > -1) allEvents.value[idxNext].created_at = next.created_at;
-
-          isLoading.value = true;
-          try {
-            await Promise.all([
-              supabase.from('events').update({ created_at: current.created_at }).eq('id', current.id),
-              supabase.from('events').update({ created_at: next.created_at }).eq('id', next.id)
-            ]);
-          } catch (error) {
-            console.error('Move Down error:', error);
-          } finally {
-            isLoading.value = false;
           }
         };
 
@@ -548,7 +578,7 @@
             if (expensesRes.data) expenses.value = expensesRes.data;
           } catch (error) {
             console.error('Fetch error:', error);
-            connectionError.value = error.message || '連線失敗，請檢查資料庫設定';
+            connectionError.value = error.message || '連線失敗，請檢查資料表是否建立正確';
           } finally {
             isLoading.value = false;
           }
@@ -556,7 +586,6 @@
 
         onMounted(() => {
           fetchData();
-          
           try {
             supabase.channel('public:all')
               .on('postgres_changes', { event: '*', schema: 'public', table: 'events' }, fetchData)
@@ -570,7 +599,7 @@
         return { 
           currentTab, members, baseDays, selectedDay, currentDayInfo, currentDayEvents, allEvents,
           showEventModal, currentEventForm, isEditing, openAddModal, openEditModal, saveEvent, deleteEvent, injectDefaultEvents,
-          moveUp, moveDown, // 新增的上下移動方法
+          isReordering, tempEvents, reorderList, changeDay, startReorder, cancelReorder, saveReorder,
           newExpense, addExpense, deleteExpense, balances, expenses, selectAllSplitters, isLoading, connectionError
         };
       }
